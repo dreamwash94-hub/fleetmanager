@@ -670,7 +670,7 @@ function ContractForm({ init = {}, onClose, onSave, notify, vehicles, clients })
   const s = (k) => (e) => setF(p => ({ ...p, [k]: e.target.value }));
   const save = async () => {
     setSaving(true);
-    const row = { client_id: Number(f.clientId), vehicle_id: Number(f.vehicleId), start_date: f.startDate, end_date: f.endDate, status: f.status, insurance: f.insurance, deposit: Number(f.deposit), km_start: Number(f.km_start), km_end: f.km_end !== "" ? Number(f.km_end) : null, daily_rate: v?.dailyRate || 0, total: Number(f.totalManuel !== "" ? f.totalManuel : total), notes: f.notes, photo_depart_1: f.photoDepart1, photo_depart_2: f.photoDepart2, photo_depart_3: f.photoDepart3, photo_depart_4: f.photoDepart4, video_depart: f.videoDepart, photo_retour_1: f.photoRetour1, photo_retour_2: f.photoRetour2, photo_retour_3: f.photoRetour3, photo_retour_4: f.photoRetour4, video_retour: f.videoRetour, photo_compteur_depart: f.photoCompteurDepart, photo_essence_depart: f.photoEssenceDepart, photo_compteur_retour: f.photoCompteurRetour, photo_essence_retour: f.photoEssenceRetour };
+    const row = { client_id: Number(f.clientId), vehicle_id: Number(f.vehicleId), start_date: f.startDate, end_date: f.endDate, status: f.status, insurance: f.insurance, deposit: Number(f.deposit), km_start: Number(f.km_start), km_end: f.km_end !== "" ? Number(f.km_end) : null, daily_rate: v?.dailyRate || 0, total: Number(f.totalManuel !== "" ? f.totalManuel : total), notes: f.notes, photo_depart_1: f.photoDepart1, photo_depart_2: f.photoDepart2, photo_depart_3: f.photoDepart3, photo_depart_4: f.photoDepart4, video_depart: f.videoDepart, photo_retour_1: f.photoRetour1, photo_retour_2: f.photoRetour2, photo_retour_3: f.photoRetour3, photo_retour_4: f.photoRetour4, video_retour: f.videoRetour, photo_compteur_depart: f.photoCompteurDepart, photo_essence_depart: f.photoEssenceDepart, photo_compteur_retour: f.photoCompteurRetour, photo_essence_retour: f.photoEssenceRetour, signature_client: signatureData || null };
     const { error } = init.id
       ? await supabase.from("contracts").update(row).eq("id", init.id)
       : await supabase.from("contracts").insert(row);
@@ -1271,10 +1271,10 @@ function ContractsView({ contracts, clients, vehicles, search, setModal }) {
               </div>
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={() => {
-                  const contractForPdf = { id: c.id, clientId: c.clientId, vehicleId: c.vehicleId, startDate: c.startDate, endDate: c.endDate, status: c.status, insurance: c.insurance, deposit: c.deposit, km_start: c.km_start, km_end: c.km_end, dailyRate: c.dailyRate, total: c.total, notes: c.notes };
+                  const contractForPdf = { id: c.id, clientId: c.clientId, vehicleId: c.vehicleId, startDate: c.startDate, endDate: c.endDate, status: c.status, insurance: c.insurance, deposit: c.deposit, km_start: c.km_start, km_end: c.km_end, dailyRate: c.dailyRate, total: c.total, notes: c.notes, photoDepart1: c.photoDepart1, photoDepart2: c.photoDepart2, photoDepart3: c.photoDepart3, photoDepart4: c.photoDepart4, videoDepart: c.videoDepart, photoRetour1: c.photoRetour1, photoRetour2: c.photoRetour2, photoRetour3: c.photoRetour3, photoRetour4: c.photoRetour4, videoRetour: c.videoRetour, photoCompteurDepart: c.photoCompteurDepart, photoEssenceDepart: c.photoEssenceDepart, photoCompteurRetour: c.photoCompteurRetour, photoEssenceRetour: c.photoEssenceRetour };
                   const clientForPdf = clients.find(x => x.id === c.clientId);
                   const vehicleForPdf = vehicles.find(x => x.id === c.vehicleId);
-                  const doc = generateContractPDFBlob({ contract: contractForPdf, client: clientForPdf, vehicle: vehicleForPdf });
+                  const doc = generateContractPDFBlob({ contract: contractForPdf, client: clientForPdf, vehicle: vehicleForPdf, signatureClient: c.signatureClient });
                   const blob = doc.output("blob");
                   const url = URL.createObjectURL(blob);
                   window.open(url, "_blank");
@@ -1700,11 +1700,6 @@ function FacturesView({ factures, contracts, clients, setModal, notify, refresh 
     doc.setFontSize(11); doc.setFont("helvetica","normal");
     doc.text("FleetManager — Gestion de flotte", 14, 24);
     doc.setFontSize(10); doc.text(`N° FAC-${String(facture.id).padStart(4,"0")} — ${fmtD(new Date())}`, 14, 31);
-
-    const sc = facture.status === "payée" ? [16,185,129] : facture.status === "annulée" ? [239,68,68] : [245,158,11];
-    doc.setFillColor(...sc); doc.roundedRect(150,10,46,12,3,3,"F");
-    doc.setTextColor(255,255,255); doc.setFontSize(9); doc.setFont("helvetica","bold");
-    doc.text(facture.status.toUpperCase(), 173, 18, { align: "center" });
 
     let y = 50;
     doc.setFillColor(...light); doc.rect(14,y,182,7,"F");
