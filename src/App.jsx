@@ -506,7 +506,7 @@ function Badge({ status }) {
 function Modal({ title, onClose, children }) {
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-      <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 580, maxHeight: "90vh", overflow: "auto" }}>
+      <div style={{ background: "#fff", borderRadius: 16, width: "100%", maxWidth: 580, maxHeight: "90vh", overflow: "auto", WebkitOverflowScrolling: "touch" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px 24px", borderBottom: "1px solid #f0f0f0" }}>
           <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#111" }}>{title}</h3>
           <button onClick={onClose} style={{ background: "#f5f5f5", border: "none", borderRadius: 8, width: 32, height: 32, cursor: "pointer", fontSize: 18 }}>×</button>
@@ -2645,6 +2645,12 @@ export default function App() {
       .fm-bottom-nav button.active { background: #eff6ff; border-radius: 10px; }
       .fm-mobile-pb { padding-bottom: 90px; }
       @media (min-width: 769px) { .fm-mobile-pb { padding-bottom: 0; } }
+      /* Scroll iPhone sur toutes les pages */
+      .fm-content { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+      body, html, #root { overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; height: auto !important; }
+      * { -webkit-tap-highlight-color: transparent; }
+      /* Fix modal scroll iPhone */
+      .fm-modal-inner { overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; }
     `}</style>
     <div style={{ fontFamily: "'DM Sans', 'Segoe UI', sans-serif", background: "#f8f9fc", minHeight: "100vh", overflowX: "hidden", WebkitOverflowScrolling: "touch" }}>
       {saveMsg && <div style={{ position: "fixed", top: 16, left: "50%", transform: "translateX(-50%)", zIndex: 9999, background: "#111", color: "#fff", padding: "12px 20px", borderRadius: 10, fontSize: 14, fontWeight: 600, whiteSpace: "nowrap" }}>{saveMsg}</div>}
