@@ -1092,6 +1092,130 @@ const TABS = [
   { id: "amendes", label: "Amendes", icon: "🚨" },
 ];
 
+
+function CalendarView({ contracts, clients, vehicles }) {
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDay, setSelectedDay] = useState(null);
+
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+  const monthNames = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+  const dayNames = ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
+
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const startOffset = (firstDay.getDay() + 6) % 7; // Lundi = 0
+  const daysInMonth = lastDay.getDate();
+
+  const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
+  const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
+
+  // Trouver les contrats actifs pour chaque jour
+  const getContractsForDay = (day) => {
+    const date = new Date(year, month, day);
+    return contracts.filter(c => {
+      if (!c.startDate || !c.endDate) return false;
+      const start = new Date(c.startDate);
+      const end = new Date(c.endDate);
+      start.setHours(0,0,0,0); end.setHours(23,59,59,999);
+      return date >= start && date <= end;
+    });
+  };
+
+  const selectedContracts = selectedDay ? getContractsForDay(selectedDay) : [];
+  const today = new Date();
+  const isToday = (day) => today.getFullYear() === year && today.getMonth() === month && today.getDate() === day;
+
+  const statusColor = { actif: "#3b82f6", terminé: "#10b981", annulé: "#ef4444" };
+
+  return (
+    <div style={{ background: "#fff", borderRadius: 14, border: "1px solid #f0f0f0", overflow: "hidden", marginTop: 20 }}>
+      {/* Header calendrier */}
+      <div style={{ padding: "16px 20px", borderBottom: "1px solid #f5f5f5", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>📅 Calendrier des locations</h3>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <button onClick={prevMonth} style={{ background: "#f3f4f6", border: "none", borderRadius: 8, width: 32, height: 32, cursor: "pointer", fontSize: 16 }}>‹</button>
+          <span style={{ fontWeight: 700, fontSize: 15, minWidth: 160, textAlign: "center" }}>{monthNames[month]} {year}</span>
+          <button onClick={nextMonth} style={{ background: "#f3f4f6", border: "none", borderRadius: 8, width: 32, height: 32, cursor: "pointer", fontSize: 16 }}>›</button>
+          <button onClick={() => setCurrentDate(new Date())} style={{ background: "#eff6ff", border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#2563eb" }}>Aujourd'hui</button>
+        </div>
+      </div>
+
+      <div style={{ padding: 16 }}>
+        {/* Jours de la semaine */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, marginBottom: 4 }}>
+          {dayNames.map(d => (
+            <div key={d} style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: "#9ca3af", padding: "4px 0" }}>{d}</div>
+          ))}
+        </div>
+
+        {/* Grille des jours */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
+          {Array.from({ length: startOffset }).map((_, i) => <div key={`empty-${i}`} />)}
+          {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => {
+            const dayContracts = getContractsForDay(day);
+            const isSelected = selectedDay === day;
+            const todayDay = isToday(day);
+            return (
+              <div key={day} onClick={() => setSelectedDay(isSelected ? null : day)}
+                style={{
+                  minHeight: 56, padding: "4px 6px", borderRadius: 8, cursor: "pointer",
+                  background: isSelected ? "#eff6ff" : todayDay ? "#fef3c7" : "#fafafa",
+                  border: isSelected ? "2px solid #2563eb" : todayDay ? "2px solid #f59e0b" : "1px solid #f0f0f0",
+                  transition: "all .15s"
+                }}
+                onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = "#f0f7ff"; }}
+                onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = todayDay ? "#fef3c7" : "#fafafa"; }}>
+                <p style={{ margin: "0 0 3px", fontSize: 12, fontWeight: todayDay ? 800 : 600, color: todayDay ? "#d97706" : "#374151" }}>{day}</p>
+                {dayContracts.slice(0, 2).map(c => {
+                  const client = clients.find(x => x.id === c.clientId);
+                  return (
+                    <div key={c.id} style={{ background: (statusColor[c.status] || "#6b7280") + "20", borderLeft: `2px solid ${statusColor[c.status] || "#6b7280"}`, borderRadius: 3, padding: "1px 4px", marginBottom: 2 }}>
+                      <p style={{ margin: 0, fontSize: 9, fontWeight: 600, color: statusColor[c.status] || "#6b7280", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{client?.name?.split(" ")[0] || "?"}</p>
+                    </div>
+                  );
+                })}
+                {dayContracts.length > 2 && <p style={{ margin: 0, fontSize: 9, color: "#9ca3af" }}>+{dayContracts.length - 2}</p>}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Détail du jour sélectionné */}
+        {selectedDay && (
+          <div style={{ marginTop: 16, borderTop: "1px solid #f0f0f0", paddingTop: 14 }}>
+            <p style={{ margin: "0 0 10px", fontWeight: 700, fontSize: 14 }}>
+              📅 {selectedDay} {monthNames[month]} {year} — {selectedContracts.length} contrat(s)
+            </p>
+            {selectedContracts.length === 0 ? (
+              <p style={{ color: "#9ca3af", fontSize: 13 }}>Aucun contrat ce jour</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {selectedContracts.map(c => {
+                  const client = clients.find(x => x.id === c.clientId);
+                  const vehicle = vehicles.find(x => x.id === c.vehicleId);
+                  return (
+                    <div key={c.id} style={{ background: "#f8f9fc", borderRadius: 10, padding: "10px 14px", borderLeft: `3px solid ${statusColor[c.status] || "#6b7280"}` }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div>
+                          <p style={{ margin: "0 0 3px", fontWeight: 700, fontSize: 14 }}>#{c.id} — {client?.name}</p>
+                          <p style={{ margin: "0 0 2px", fontSize: 12, color: "#6b7280" }}>🚗 {vehicle?.brand} {vehicle?.model} · {vehicle?.plate}</p>
+                          <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>📅 {fmtDate(c.startDate)} → {fmtDate(c.endDate)} · 💶 {fmt(c.total)}€</p>
+                        </div>
+                        <Badge status={c.status} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function Dashboard({ vehicles, clients, contracts }) {
   const dispo = vehicles.filter(v => v.status === "disponible").length;
   const loue = vehicles.filter(v => v.status === "loué").length;
@@ -1157,6 +1281,9 @@ function Dashboard({ vehicles, clients, contracts }) {
           })}
         </div>
       </div>
+
+      {/* CALENDRIER */}
+      <CalendarView contracts={contracts} clients={clients} vehicles={vehicles} />
     </div>
   );
 }
@@ -2224,9 +2351,21 @@ function GlobalSearchResults({ query, vehicles, clients, contracts, setTab, setG
   if (!query || query.length < 2) return null;
   const q = query.toLowerCase();
 
+  // Détection si la recherche ressemble à une date (ex: 14/04/2026 ou 2026-04-14 ou 14/04)
+  const isDate = /(\d{1,2}[\/\-]\d{1,2}([\/\-]\d{2,4})?|\d{4}[\/\-]\d{2}[\/\-]\d{2})/.test(query.trim());
+
   const matchVehicles = vehicles.filter(v => [v.brand, v.model, v.plate, v.category].some(f => f?.toLowerCase().includes(q)));
   const matchClients = clients.filter(c => [c.name, c.email, c.phone, c.license].some(f => f?.toLowerCase().includes(q)));
-  const matchContracts = contracts.filter(c => [String(c.id)].some(f => f?.includes(q)));
+  const matchContracts = contracts.filter(c => {
+    // Recherche par ID
+    if (String(c.id).includes(q)) return true;
+    // Recherche par date (startDate ou endDate)
+    const start = c.startDate ? new Date(c.startDate).toLocaleDateString("fr-FR") : "";
+    const end = c.endDate ? new Date(c.endDate).toLocaleDateString("fr-FR") : "";
+    const startISO = c.startDate || "";
+    const endISO = c.endDate || "";
+    return [start, end, startISO, endISO].some(d => d.includes(query.trim()));
+  });
 
   const total = matchVehicles.length + matchClients.length + matchContracts.length;
 
@@ -2277,15 +2416,20 @@ function GlobalSearchResults({ query, vehicles, clients, contracts, setTab, setG
       {matchContracts.length > 0 && (
         <div>
           <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase" }}>📋 Contrats ({matchContracts.length})</p>
-          {matchContracts.map(c => (
-            <div key={c.id} onClick={() => { setTab("contracts"); close(); }}
-              style={{ padding: "8px 10px", borderRadius: 8, cursor: "pointer" }}
-              onMouseEnter={e => e.currentTarget.style.background = "#f8f9fc"}
-              onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-              <p style={{ margin: 0, fontSize: 13, fontWeight: 700 }}>Contrat #{c.id}</p>
-              <p style={{ margin: 0, fontSize: 11, color: "#6b7280" }}>{fmtDate(c.startDate)} → {fmtDate(c.endDate)} · {fmt(c.total)}€</p>
-            </div>
-          ))}
+          {matchContracts.map(c => {
+            const client = clients.find(x => x.id === c.clientId);
+            const vehicle = vehicles.find(x => x.id === c.vehicleId);
+            return (
+              <div key={c.id} onClick={() => { setTab("contracts"); close(); }}
+                style={{ padding: "8px 10px", borderRadius: 8, cursor: "pointer" }}
+                onMouseEnter={e => e.currentTarget.style.background = "#f8f9fc"}
+                onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                <p style={{ margin: "0 0 2px", fontSize: 13, fontWeight: 700 }}>Contrat #{c.id} — {client?.name || "—"}</p>
+                <p style={{ margin: "0 0 1px", fontSize: 11, color: "#6b7280" }}>🚗 {vehicle?.brand} {vehicle?.model} · {vehicle?.plate}</p>
+                <p style={{ margin: 0, fontSize: 11, color: "#6b7280" }}>📅 {fmtDate(c.startDate)} → {fmtDate(c.endDate)} · 💶 {fmt(c.total)}€</p>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
