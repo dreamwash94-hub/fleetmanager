@@ -375,6 +375,54 @@ function buildContractDoc({ contract, client, vehicle, signatureClient = null })
 }
 
 
+// ─── UPLOAD FICHIER VERS SUPABASE STORAGE ────────────────────────────────────
+async function uploadFile(file, folder = "divers") {
+  const ext = file.name.split(".").pop();
+  const fileName = `${folder}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+  const { data, error } = await supabase.storage.from("documents").upload(fileName, file, { upsert: true });
+  if (error) throw error;
+  const { data: urlData } = supabase.storage.from("documents").getPublicUrl(fileName);
+  return urlData.publicUrl;
+}
+
+function FileUploadBtn({ label, icon, value, folderName, onUploaded, onRemove }) {
+  const [uploading, setUploading] = useState(false);
+  return (
+    <div style={{ background: "#f9fafb", border: "1.5px dashed " + (value ? "#93c5fd" : "#e5e7eb"), borderRadius: 8, padding: "10px 14px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: value ? 4 : 0 }}>
+        <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: "#374151" }}>{icon} {label}</p>
+        <div style={{ display: "flex", gap: 6 }}>
+          <label style={{ cursor: uploading ? "wait" : "pointer" }}>
+            <input type="file" style={{ display: "none" }} accept=".pdf,.jpg,.jpeg,.png"
+              onChange={async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                setUploading(true);
+                try {
+                  const url = await uploadFile(file, folderName);
+                  onUploaded(url);
+                } catch(err) {
+                  alert("Erreur upload : " + err.message);
+                } finally { setUploading(false); }
+              }} />
+            <span style={{ background: uploading ? "#f3f4f6" : value ? "#eff6ff" : "#f3f4f6", color: uploading ? "#9ca3af" : value ? "#2563eb" : "#6b7280", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: uploading ? "wait" : "pointer" }}>
+              {uploading ? "⏳..." : value ? "Changer" : "Ajouter"}
+            </span>
+          </label>
+          {value && <button onClick={onRemove} style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 6, padding: "4px 8px", cursor: "pointer", fontSize: 11 }}>✕</button>}
+        </div>
+      </div>
+      {value && (
+        <a href={value} target="_blank" rel="noopener noreferrer"
+          style={{ fontSize: 11, color: "#2563eb", textDecoration: "none", display: "flex", alignItems: "center", gap: 4 }}>
+          📎 Voir le document ↗
+        </a>
+      )}
+    </div>
+  );
+}
+
+
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -543,27 +591,9 @@ function VehicleForm({ init = {}, onClose, onSave, notify }) {
             { key: "docAssurance", label: "Assurance", icon: "🛡️" },
             { key: "docControleTech", label: "Contrôle technique", icon: "🔍" },
           ].map(({ key, label, icon }) => (
-            <div key={key} style={{ display: "flex", alignItems: "center", gap: 10, background: "#f9fafb", border: "1.5px dashed " + (f[key] ? "#93c5fd" : "#e5e7eb"), borderRadius: 8, padding: "10px 14px" }}>
-              <span style={{ fontSize: 18 }}>{icon}</span>
-              <div style={{ flex: 1 }}>
-                <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#374151" }}>{label}</p>
-                {f[key] && <p style={{ margin: "2px 0 0", fontSize: 11, color: "#6b7280" }}>📄 {f[key]}</p>}
-              </div>
-              <label style={{ cursor: "pointer" }}>
-                <input type="file" style={{ display: "none" }} accept=".pdf,.jpg,.jpeg,.png"
-                  onChange={(e) => {
-                    const file = e.target.files[0];
-                    if (file) setF(p => ({ ...p, [key]: file.name }));
-                  }} />
-                <span style={{ background: f[key] ? "#eff6ff" : "#f3f4f6", color: f[key] ? "#2563eb" : "#6b7280", border: "none", borderRadius: 6, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-                  {f[key] ? "Changer" : "Ajouter"}
-                </span>
-              </label>
-              {f[key] && (
-                <button onClick={() => setF(p => ({ ...p, [key]: null }))}
-                  style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 6, padding: "5px 8px", cursor: "pointer", fontSize: 12 }}>✕</button>
-              )}
-            </div>
+            <FileUploadBtn key={key} label={label} icon={icon} value={f[key]} folderName="vehicules"
+              onUploaded={(url) => setF(p => ({ ...p, [key]: url }))}
+              onRemove={() => setF(p => ({ ...p, [key]: null }))} />
           ))}
         </div>
       </div>
@@ -616,22 +646,9 @@ function ClientForm({ init = {}, onClose, onSave, notify }) {
             { key: "carteIdRecto", label: "Carte d'identité — Recto", icon: "🪪" },
             { key: "carteIdVerso", label: "Carte d'identité — Verso", icon: "🪪" },
           ].map(({ key, label, icon }) => (
-            <div key={key} style={{ background: "#f9fafb", border: "1.5px dashed " + (f[key] ? "#93c5fd" : "#e5e7eb"), borderRadius: 8, padding: "10px 14px" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: f[key] ? 4 : 0 }}>
-                <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: "#374151" }}>{icon} {label}</p>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <label style={{ cursor: "pointer" }}>
-                    <input type="file" style={{ display: "none" }} accept=".pdf,.jpg,.jpeg,.png"
-                      onChange={(e) => { const file = e.target.files[0]; if (file) setF(p => ({ ...p, [key]: file.name })); }} />
-                    <span style={{ background: f[key] ? "#eff6ff" : "#f3f4f6", color: f[key] ? "#2563eb" : "#6b7280", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
-                      {f[key] ? "Changer" : "Ajouter"}
-                    </span>
-                  </label>
-                  {f[key] && <button onClick={() => setF(p => ({ ...p, [key]: null }))} style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 6, padding: "4px 8px", cursor: "pointer", fontSize: 11 }}>✕</button>}
-                </div>
-              </div>
-              {f[key] && <p style={{ margin: 0, fontSize: 11, color: "#6b7280" }}>📄 {f[key]}</p>}
-            </div>
+            <FileUploadBtn key={key} label={label} icon={icon} value={f[key]} folderName="clients"
+              onUploaded={(url) => setF(p => ({ ...p, [key]: url }))}
+              onRemove={() => setF(p => ({ ...p, [key]: null }))} />
           ))}
         </div>
       </div>
@@ -1000,20 +1017,9 @@ function MaintenanceForm({ init = {}, onClose, onSave, notify, vehicles }) {
         <p style={{ margin: "0 0 10px", fontSize: 12, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: .4 }}>📎 Pièces jointes</p>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
           {[{key:"pj1",label:"Document 1"},{key:"pj2",label:"Document 2"},{key:"pj3",label:"Document 3"}].map(({ key, label }) => (
-            <div key={key} style={{ background: "#f9fafb", border: "1.5px dashed " + (f[key] ? "#93c5fd" : "#e5e7eb"), borderRadius: 8, padding: "10px", textAlign: "center" }}>
-              <div style={{ fontSize: 20, marginBottom: 4 }}>{f[key] ? "📎" : "📄"}</div>
-              <p style={{ margin: "0 0 6px", fontSize: 10, fontWeight: 600, color: f[key] ? "#2563eb" : "#9ca3af" }}>{f[key] ? f[key].substring(0, 14) + "…" : label}</p>
-              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                <label style={{ cursor: "pointer" }}>
-                  <input type="file" style={{ display: "none" }} accept=".pdf,.jpg,.jpeg,.png"
-                    onChange={(e) => { const file = e.target.files[0]; if (file) setF(p => ({ ...p, [key]: file.name })); }} />
-                  <span style={{ display: "block", background: f[key] ? "#eff6ff" : "#f3f4f6", color: f[key] ? "#2563eb" : "#6b7280", borderRadius: 6, padding: "3px 0", fontSize: 10, fontWeight: 600, cursor: "pointer" }}>
-                    {f[key] ? "Changer" : "Ajouter"}
-                  </span>
-                </label>
-                {f[key] && <button onClick={() => setF(p => ({ ...p, [key]: null }))} style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 6, padding: "2px 6px", cursor: "pointer", fontSize: 10 }}>✕ Retirer</button>}
-              </div>
-            </div>
+            <FileUploadBtn key={key} label={label} icon="📄" value={f[key]} folderName="entretien"
+              onUploaded={(url) => setF(p => ({ ...p, [key]: url }))}
+              onRemove={() => setF(p => ({ ...p, [key]: null }))} />
           ))}
         </div>
       </div>
