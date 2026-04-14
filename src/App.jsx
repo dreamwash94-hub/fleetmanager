@@ -1093,7 +1093,7 @@ const TABS = [
 ];
 
 
-function CalendarView({ contracts, clients, vehicles }) {
+function CalendarView({ contracts, clients, vehicles, onContractClick }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState(null);
 
@@ -1195,10 +1195,13 @@ function CalendarView({ contracts, clients, vehicles }) {
                   const client = clients.find(x => x.id === c.clientId);
                   const vehicle = vehicles.find(x => x.id === c.vehicleId);
                   return (
-                    <div key={c.id} style={{ background: "#f8f9fc", borderRadius: 10, padding: "10px 14px", borderLeft: `3px solid ${statusColor[c.status] || "#6b7280"}` }}>
+                    <div key={c.id} onClick={() => onContractClick(c)}
+                      style={{ background: "#f8f9fc", borderRadius: 10, padding: "10px 14px", borderLeft: `3px solid ${statusColor[c.status] || "#6b7280"}`, cursor: "pointer", transition: "all .15s" }}
+                      onMouseEnter={e => e.currentTarget.style.background = "#eff6ff"}
+                      onMouseLeave={e => e.currentTarget.style.background = "#f8f9fc"}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <div>
-                          <p style={{ margin: "0 0 3px", fontWeight: 700, fontSize: 14 }}>#{c.id} — {client?.name}</p>
+                          <p style={{ margin: "0 0 3px", fontWeight: 700, fontSize: 14 }}>#{c.id} — {client?.name} <span style={{ fontSize: 11, color: "#2563eb", fontWeight: 400 }}>→ Ouvrir</span></p>
                           <p style={{ margin: "0 0 2px", fontSize: 12, color: "#6b7280" }}>🚗 {vehicle?.brand} {vehicle?.model} · {vehicle?.plate}</p>
                           <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>📅 {fmtDate(c.startDate)} → {fmtDate(c.endDate)} · 💶 {fmt(c.total)}€</p>
                         </div>
@@ -1216,7 +1219,7 @@ function CalendarView({ contracts, clients, vehicles }) {
   );
 }
 
-function Dashboard({ vehicles, clients, contracts }) {
+function Dashboard({ vehicles, clients, contracts, onContractClick }) {
   const dispo = vehicles.filter(v => v.status === "disponible").length;
   const loue = vehicles.filter(v => v.status === "loué").length;
   const entretien = vehicles.filter(v => v.status === "entretien").length;
@@ -1283,7 +1286,7 @@ function Dashboard({ vehicles, clients, contracts }) {
       </div>
 
       {/* CALENDRIER */}
-      <CalendarView contracts={contracts} clients={clients} vehicles={vehicles} />
+      <CalendarView contracts={contracts} clients={clients} vehicles={vehicles} onContractClick={onContractClick} />
     </div>
   );
 }
@@ -2607,7 +2610,7 @@ export default function App() {
           </div>
         ) : (
           <>
-            {tab === "dashboard" && <Dashboard vehicles={vehicles} clients={clients} contracts={contracts} />}
+            {tab === "dashboard" && <Dashboard vehicles={vehicles} clients={clients} contracts={contracts} onContractClick={(c) => setModal({ type: "editContract", data: c })} />}
             {tab === "vehicles" && <Vehicles vehicles={vehicles} search={search} setModal={setModal} />}
             {tab === "clients" && <Clients clients={clients} contracts={contracts} search={search} setModal={setModal} />}
             {tab === "contracts" && <ContractsView contracts={contracts} clients={clients} vehicles={vehicles} search={search} setModal={setModal} onDelete={async (id) => { await supabase.from("contracts").delete().eq("id", id); await loadAll(true); notify("✅ Contrat supprimé !"); }} />}
