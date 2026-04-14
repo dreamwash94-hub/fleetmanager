@@ -229,7 +229,7 @@ function buildContractDoc({ contract, client, vehicle, signatureClient = null })
     doc.setFont("helvetica", "italic");
     doc.text("Signature électronique du locataire — Lu et approuvé", 105, y + 5, { align: "center" });
     try {
-      doc.addImage(signatureClient, "PNG", 57, y + 7, 96, 24);
+      doc.addImage(signatureClient, "JPEG", 57, y + 7, 96, 24);
     } catch(e) {}
     y += 42;
   }
@@ -344,7 +344,7 @@ function buildContractDoc({ contract, client, vehicle, signatureClient = null })
   doc.text("Lu et approuvé — Signature :", 114, cy + 13);
   if (signatureClient) {
     try {
-      doc.addImage(signatureClient, "PNG", 114, cy + 15, 80, 22);
+      doc.addImage(signatureClient, "JPEG", 114, cy + 15, 80, 22);
     } catch(e) {}
   } else {
     doc.setDrawColor(200, 200, 200);
@@ -437,7 +437,7 @@ const toClient = (r) => ({ id: r.id, name: r.name, email: r.email, phone: r.phon
 const toContract = (r) => ({ id: r.id, clientId: r.client_id, vehicleId: r.vehicle_id, startDate: r.start_date, endDate: r.end_date, status: r.status, insurance: r.insurance, deposit: r.deposit, km_start: r.km_start, km_end: r.km_end, dailyRate: r.daily_rate, total: r.total, notes: r.notes, photoDepart1: r.photo_depart_1 || null, photoDepart2: r.photo_depart_2 || null, photoDepart3: r.photo_depart_3 || null, photoDepart4: r.photo_depart_4 || null, videoDepart: r.video_depart || null, photoRetour1: r.photo_retour_1 || null, photoRetour2: r.photo_retour_2 || null, photoRetour3: r.photo_retour_3 || null, photoRetour4: r.photo_retour_4 || null, videoRetour: r.video_retour || null, photoCompteurDepart: r.photo_compteur_depart || null, photoEssenceDepart: r.photo_essence_depart || null, photoCompteurRetour: r.photo_compteur_retour || null, photoEssenceRetour: r.photo_essence_retour || null });
 const toMaintenance = (r) => ({ id: r.id, vehicleId: r.vehicle_id, type: r.type, date: r.date, status: r.status, cost: r.cost, garage: r.garage, notes: r.notes, pj1: r.pj_1 || null, pj2: r.pj_2 || null, pj3: r.pj_3 || null });
 const toDocument = (r) => ({ id: r.id, category: r.category, name: r.name, description: r.description, expiryDate: r.expiry_date, status: r.status, fileName: r.file_name, uploadDate: r.upload_date });
-const toFacture = (r) => ({ id: r.id, contractId: r.contract_id, clientId: r.client_id, label: r.label, amount: r.amount, date: r.date, status: r.status, notes: r.notes });
+const toFacture = (r) => ({ id: r.id, contractId: r.contract_id, clientId: r.client_id, label: r.label, amount: r.amount, date: r.date, status: r.status, notes: r.notes, numero: r.numero || "", lignes: r.lignes ? JSON.parse(r.lignes) : [] });
 const toAmende = (r) => ({ id: r.id, contractId: r.contract_id, clientId: r.client_id, vehicleId: r.vehicle_id, date: r.date, amount: r.amount, description: r.description, status: r.status, reference: r.reference, notes: r.notes, pieceJointe1: r.piece_jointe_1 || null, pieceJointe2: r.piece_jointe_2 || null, pieceJointe3: r.piece_jointe_3 || null, lienAntai: r.lien_antai || "", lienFps: r.lien_fps || "" });
 
 const inp = { width: "100%", padding: "10px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 14, outline: "none", boxSizing: "border-box", fontFamily: "inherit" };
@@ -911,7 +911,16 @@ Montant : ${montant} €`,
               <button onClick={() => { if (signatureRef.ctx && signatureRef.canvas) signatureRef.ctx.clearRect(0, 0, signatureRef.canvas.width, signatureRef.canvas.height); }} style={{ fontSize: 11, color: "#6b7280", background: "#f3f4f6", border: "none", borderRadius: 6, padding: "4px 12px", cursor: "pointer" }}>🗑 Effacer</button>
               <button onClick={() => {
                 if (signatureRef.canvas) {
-                  setSignatureData(signatureRef.canvas.toDataURL("image/png"));
+                  // Créer une copie du canvas avec fond blanc pour jsPDF
+                  const tmpCanvas = document.createElement("canvas");
+                  tmpCanvas.width = signatureRef.canvas.width;
+                  tmpCanvas.height = signatureRef.canvas.height;
+                  const tmpCtx = tmpCanvas.getContext("2d");
+                  tmpCtx.fillStyle = "#ffffff";
+                  tmpCtx.fillRect(0, 0, tmpCanvas.width, tmpCanvas.height);
+                  tmpCtx.drawImage(signatureRef.canvas, 0, 0);
+                  const dataUrl = tmpCanvas.toDataURL("image/jpeg", 0.95);
+                  setSignatureData(dataUrl);
                   setShowSignaturePad(false);
                   signatureRef.canvas = null;
                 }
@@ -1558,42 +1567,108 @@ function PinLock({ onUnlock }) {
 
 // ─── FORMULAIRE FACTURE ───────────────────────────────────────────────────────
 function FactureForm({ init = {}, onClose, onSave, notify, contracts, clients }) {
+  const annee = new Date().getFullYear();
   const [f, setF] = useState({
     contractId: init.contractId || "",
     clientId: init.clientId || clients[0]?.id || "",
-    label: init.label || "",
-    amount: init.amount || "",
+    numero: init.numero || `FAC-${annee}-${String(Math.floor(Math.random()*900)+100)}`,
     date: init.date || new Date().toISOString().slice(0, 10),
     status: init.status || "en attente",
     notes: init.notes || "",
+    lignes: init.lignes?.length ? init.lignes : [{ description: "", quantite: 1, prixUnitaire: "" }],
   });
   const [saving, setSaving] = useState(false);
   const s = (k) => (e) => setF(p => ({ ...p, [k]: e.target.value }));
+
+  const totalHT = f.lignes.reduce((s, l) => s + (Number(l.quantite) * Number(l.prixUnitaire) || 0), 0);
+  const totalTVA = Math.round(totalHT * 0.20 * 100) / 100;
+  const totalTTC = Math.round((totalHT + totalTVA) * 100) / 100;
+
+  const updateLigne = (i, key, val) => setF(p => {
+    const lignes = [...p.lignes];
+    lignes[i] = { ...lignes[i], [key]: val };
+    return { ...p, lignes };
+  });
+  const addLigne = () => setF(p => ({ ...p, lignes: [...p.lignes, { description: "", quantite: 1, prixUnitaire: "" }] }));
+  const removeLigne = (i) => setF(p => ({ ...p, lignes: p.lignes.filter((_, idx) => idx !== i) }));
+
   const save = async () => {
     setSaving(true);
-    const row = { contract_id: f.contractId ? Number(f.contractId) : null, client_id: Number(f.clientId), label: f.label, amount: Number(f.amount), date: f.date, status: f.status, notes: f.notes };
+    const row = {
+      contract_id: f.contractId ? Number(f.contractId) : null,
+      client_id: Number(f.clientId),
+      numero: f.numero,
+      label: f.lignes.map(l => l.description).filter(Boolean).join(", ") || "Facture",
+      amount: totalTTC,
+      date: f.date,
+      status: f.status,
+      notes: f.notes,
+      lignes: JSON.stringify(f.lignes),
+    };
     const { error } = init.id
       ? await supabase.from("factures").update(row).eq("id", init.id)
       : await supabase.from("factures").insert(row);
     if (error) { notify("❌ Erreur : " + error.message); setSaving(false); return; }
     onClose(); await onSave(); notify("✅ Facture enregistrée !");
   };
+
   return (
     <div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <Field label="Client"><select style={sel} value={f.clientId} onChange={s("clientId")}>{clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
-        <Field label="Contrat lié (optionnel)">
+        <Field label="N° Facture"><input style={inp} value={f.numero} onChange={s("numero")} placeholder="FAC-2026-001" /></Field>
+        <Field label="Date"><input style={inp} type="date" value={f.date} onChange={s("date")} /></Field>
+        <Field label="Statut"><select style={sel} value={f.status} onChange={s("status")}>{["en attente","payée","annulée"].map(o=><option key={o}>{o}</option>)}</select></Field>
+        <Field label="Contrat lié (optionnel)" style={{ gridColumn: "1/-1" }}>
           <select style={sel} value={f.contractId} onChange={s("contractId")}>
             <option value="">— Aucun —</option>
             {contracts.map(c=><option key={c.id} value={c.id}>Contrat #{c.id}</option>)}
           </select>
         </Field>
-        <Field label="Date"><input style={inp} type="date" value={f.date} onChange={s("date")} /></Field>
-        <Field label="Statut"><select style={sel} value={f.status} onChange={s("status")}>{["en attente","payée","annulée"].map(o=><option key={o}>{o}</option>)}</select></Field>
       </div>
-      <Field label="Libellé"><input style={inp} value={f.label} onChange={s("label")} placeholder="Ex: Location véhicule du 01/04 au 05/04" /></Field>
-      <Field label="Montant (€)"><input style={inp} type="number" value={f.amount} onChange={s("amount")} placeholder="0" /></Field>
-      <Field label="Notes"><textarea style={{ ...inp, minHeight: 60, resize: "vertical" }} value={f.notes} onChange={s("notes")} /></Field>
+
+      {/* Lignes de prestation */}
+      <div style={{ marginTop: 8, marginBottom: 8 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: .4 }}>📋 Lignes de prestation</p>
+          <button onClick={addLigne} style={{ fontSize: 12, color: "#2563eb", background: "#eff6ff", border: "none", borderRadius: 6, padding: "4px 12px", cursor: "pointer", fontWeight: 600 }}>+ Ajouter une ligne</button>
+        </div>
+
+        {/* En-tête tableau */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 100px 32px", gap: 6, marginBottom: 4 }}>
+          <p style={{ margin: 0, fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>DESCRIPTION</p>
+          <p style={{ margin: 0, fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>QTÉ</p>
+          <p style={{ margin: 0, fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>PRIX U. HT (€)</p>
+          <p style={{ margin: 0 }}></p>
+        </div>
+
+        {f.lignes.map((l, i) => (
+          <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 80px 100px 32px", gap: 6, marginBottom: 6 }}>
+            <input style={inp} value={l.description} onChange={e => updateLigne(i, "description", e.target.value)} placeholder="Ex: Location véhicule, Assurance..." />
+            <input style={{ ...inp, textAlign: "center" }} type="number" min="1" value={l.quantite} onChange={e => updateLigne(i, "quantite", e.target.value)} />
+            <input style={inp} type="number" value={l.prixUnitaire} onChange={e => updateLigne(i, "prixUnitaire", e.target.value)} placeholder="0.00" />
+            <button onClick={() => removeLigne(i)} style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 6, cursor: "pointer", fontSize: 14, fontWeight: 700 }}>✕</button>
+          </div>
+        ))}
+
+        {/* Totaux */}
+        <div style={{ background: "#f8f9fc", borderRadius: 10, padding: "12px 16px", marginTop: 10 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+            <span style={{ fontSize: 13, color: "#6b7280" }}>Total HT</span>
+            <span style={{ fontSize: 13, fontWeight: 600 }}>{totalHT.toLocaleString("fr-FR")} €</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+            <span style={{ fontSize: 13, color: "#6b7280" }}>TVA 20%</span>
+            <span style={{ fontSize: 13, fontWeight: 600 }}>{totalTVA.toLocaleString("fr-FR")} €</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid #e5e7eb", paddingTop: 8 }}>
+            <span style={{ fontSize: 15, fontWeight: 800, color: "#111" }}>Total TTC</span>
+            <span style={{ fontSize: 15, fontWeight: 800, color: "#2563eb" }}>{totalTTC.toLocaleString("fr-FR")} €</span>
+          </div>
+        </div>
+      </div>
+
+      <Field label="Notes"><textarea style={{ ...inp, minHeight: 50, resize: "vertical" }} value={f.notes} onChange={s("notes")} /></Field>
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8 }}>
         <button onClick={onClose} style={btnCancel}>Annuler</button>
         <button onClick={save} disabled={saving} style={{ ...btn, background: saving ? "#93c5fd" : "#2563eb" }}>{saving ? "Enregistrement..." : "Enregistrer"}</button>
@@ -2009,12 +2084,6 @@ function generateFacturePDFAuto({ facture, client }) {
   doc.setFontSize(11); doc.setFont("helvetica","normal");
   doc.text("BAMEVENT — Location de véhicules", 14, 24);
   doc.setFontSize(10); doc.text(`N° FAC-${String(facture.id).padStart(4,"0")} — Émise le ${fmtD(new Date())}`, 14, 31);
-
-  // Statut
-  const sc = facture.status === "payée" ? [16,185,129] : facture.status === "annulée" ? [239,68,68] : [245,158,11];
-  doc.setFillColor(...sc); doc.roundedRect(150,10,46,12,3,3,"F");
-  doc.setTextColor(255,255,255); doc.setFontSize(9); doc.setFont("helvetica","bold");
-  doc.text(facture.status?.toUpperCase() || "EN ATTENTE", 173, 18, { align: "center" });
 
   let y = 48;
 
