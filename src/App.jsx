@@ -682,9 +682,29 @@ function ContractForm({ init = {}, onClose, onSave, notify, vehicles, clients })
     const clientForPdf = clients.find(x => x.id === Number(f.clientId));
     const vehicleForPdf = vehicles.find(x => x.id === Number(f.vehicleId));
     generateContractPDF({ contract: contractForPdf, client: clientForPdf, vehicle: vehicleForPdf, signatureClient: signatureData });
+
+    // Créer facture automatiquement si nouveau contrat
+    if (!init.id) {
+      const montantTotal = Number(f.totalManuel !== "" ? f.totalManuel : total);
+      const vehicule = `${vehicleForPdf?.brand || ""} ${vehicleForPdf?.model || ""} (${vehicleForPdf?.plate || ""})`;
+      const factureRow = {
+        client_id: Number(f.clientId),
+        label: `Location ${vehicule} du ${new Date(f.startDate).toLocaleDateString("fr-FR")} au ${new Date(f.endDate).toLocaleDateString("fr-FR")}`,
+        amount: montantTotal,
+        date: new Date().toISOString().slice(0, 10),
+        status: "en attente",
+        notes: `Généré automatiquement depuis le contrat`,
+      };
+      const { data: factureData } = await supabase.from("factures").insert(factureRow).select().single();
+      // Générer PDF facture
+      if (factureData) {
+        generateFacturePDFAuto({ facture: { ...factureData, clientId: factureData.client_id, contractId: factureData.contract_id }, client: clientForPdf });
+      }
+    }
+
     onClose();
     await onSave();
-    notify("✅ Contrat enregistré ! PDF téléchargé.");
+    notify("✅ Contrat enregistré ! PDF contrat + facture téléchargés.");
     // Envoi automatique par EmailJS si le client a un email
     if (clientForPdf?.email) {
       const montant = Number(f.totalManuel !== "" ? f.totalManuel : total).toLocaleString("fr-FR");
@@ -1249,7 +1269,14 @@ function ContractsView({ contracts, clients, vehicles, search, setModal }) {
                   const blob = doc.output("blob");
                   const url = URL.createObjectURL(blob);
                   window.open(url, "_blank");
-                }} style={{ background: "#f0fdf4", border: "none", borderRadius: 7, padding: "6px 12px", cursor: "pointer", color: "#16a34a", fontSize: 13, fontWeight: 600 }}>👁 Voir PDF</button>
+                }} style={{ background: "#f0fdf4", border: "none", borderRadius: 7, padding: "6px 12px", cursor: "pointer", color: "#16a34a", fontSize: 13, fontWeight: 600 }}>👁 Contrat PDF</button>
+                <button onClick={() => {
+                  const client = clients.find(x => x.id === c.clientId);
+                  const vehicle = vehicles.find(x => x.id === c.vehicleId);
+                  const vehicule = `${vehicle?.brand || ""} ${vehicle?.model || ""} (${vehicle?.plate || ""})`;
+                  const factureTemp = { id: `C${c.id}`, clientId: c.clientId, contractId: c.id, label: `Location ${vehicule}`, amount: c.total, date: c.startDate, status: c.status === "terminé" ? "payée" : "en attente", notes: "" };
+                  generateFacturePDFAuto({ facture: factureTemp, client });
+                }} style={{ background: "#fdf4ff", border: "none", borderRadius: 7, padding: "6px 12px", cursor: "pointer", color: "#7c3aed", fontSize: 13, fontWeight: 600 }}>🧾 Facture PDF</button>
                 <button onClick={() => setModal({ type: "editContract", data: c })} style={{ background: "#eff6ff", border: "none", borderRadius: 7, padding: "6px 12px", cursor: "pointer", color: "#2563eb", fontSize: 13, fontWeight: 600 }}>Modifier</button>
               </div>
             </div>
@@ -1623,12 +1650,31 @@ function FacturesView({ factures, contracts, clients, setModal, notify, refresh 
     if (contract) doc.text(`Contrat référencé : #${contract.id}`, 100, y);
     y += 20;
 
-    doc.setFillColor(...blue); doc.roundedRect(14,y,182,18,3,3,"F");
-    doc.setTextColor(255,255,255); doc.setFontSize(11); doc.setFont("helvetica","normal");
-    doc.text("MONTANT TOTAL TTC", 20, y+7);
-    doc.setFontSize(18); doc.setFont("helvetica","bold");
-    doc.text(`${fmtN(facture.amount)} €`, 192, y+12, { align: "right" });
-    y += 28;
+    const mTTC = Number(facture.amount) || 0;
+    const mHT = Math.round((mTTC / 1.2) * 100) / 100;
+    const mTVA = Math.round((mTTC - mHT) * 100) / 100;
+
+    doc.setFillColor(...light); doc.rect(100,y,96,8,"F");
+    doc.setTextColor(...gray); doc.setFontSize(8); doc.setFont("helvetica","normal");
+    doc.text("Montant HT", 104, y+5.5);
+    doc.setTextColor(...dark); doc.setFont("helvetica","bold");
+    doc.text(`${fmtN(mHT)} €`, 192, y+5.5, { align: "right" });
+    y += 9;
+
+    doc.setFillColor(255,255,255); doc.rect(100,y,96,8,"F");
+    doc.setDrawColor(230,230,230); doc.setLineWidth(0.3); doc.rect(100,y,96,8);
+    doc.setTextColor(...gray); doc.setFontSize(8); doc.setFont("helvetica","normal");
+    doc.text("TVA 20%", 104, y+5.5);
+    doc.setTextColor(...dark); doc.setFont("helvetica","bold");
+    doc.text(`${fmtN(mTVA)} €`, 192, y+5.5, { align: "right" });
+    y += 10;
+
+    doc.setFillColor(...blue); doc.roundedRect(100,y,96,16,3,3,"F");
+    doc.setTextColor(255,255,255); doc.setFontSize(10); doc.setFont("helvetica","normal");
+    doc.text("TOTAL TTC", 104, y+7);
+    doc.setFontSize(16); doc.setFont("helvetica","bold");
+    doc.text(`${fmtN(mTTC)} €`, 192, y+12, { align: "right" });
+    y += 26;
 
     if (facture.notes) {
       doc.setFillColor(...light); doc.rect(14,y,182,7,"F");
@@ -1947,6 +1993,107 @@ function AmendesView({ amendes, contracts, clients, vehicles, search, setModal }
       </div>
     </div>
   );
+}
+
+
+function generateFacturePDFAuto({ facture, client }) {
+  const doc = new jsPDF();
+  const blue = [37, 99, 235]; const gray = [107, 114, 128]; const dark = [17,17,17]; const light = [243,244,246];
+  const fmtD = (d) => d ? new Date(d).toLocaleDateString("fr-FR") : "—";
+  const fmtN = (n) => n != null ? Number(n).toLocaleString("fr-FR") : "—";
+
+  // En-tête
+  doc.setFillColor(...blue); doc.rect(0, 0, 210, 38, "F");
+  doc.setTextColor(255,255,255); doc.setFontSize(22); doc.setFont("helvetica","bold");
+  doc.text("FACTURE", 14, 16);
+  doc.setFontSize(11); doc.setFont("helvetica","normal");
+  doc.text("BAMEVENT — Location de véhicules", 14, 24);
+  doc.setFontSize(10); doc.text(`N° FAC-${String(facture.id).padStart(4,"0")} — Émise le ${fmtD(new Date())}`, 14, 31);
+
+  // Statut
+  const sc = facture.status === "payée" ? [16,185,129] : facture.status === "annulée" ? [239,68,68] : [245,158,11];
+  doc.setFillColor(...sc); doc.roundedRect(150,10,46,12,3,3,"F");
+  doc.setTextColor(255,255,255); doc.setFontSize(9); doc.setFont("helvetica","bold");
+  doc.text(facture.status?.toUpperCase() || "EN ATTENTE", 173, 18, { align: "center" });
+
+  let y = 48;
+
+  // Infos agence
+  doc.setFillColor(...light); doc.rect(14,y,85,30,"F");
+  doc.setTextColor(...blue); doc.setFontSize(9); doc.setFont("helvetica","bold");
+  doc.text("ÉMETTEUR", 17, y+6);
+  doc.setTextColor(...dark); doc.setFontSize(8); doc.setFont("helvetica","normal");
+  doc.text(AGENCE.nom, 17, y+12);
+  doc.text(AGENCE.adresse + ", " + AGENCE.ville, 17, y+17);
+  doc.text("Tél : " + AGENCE.tel, 17, y+22);
+  doc.text("SIRET : " + AGENCE.siret + " — " + AGENCE.rcs, 17, y+27);
+
+  // Infos client
+  doc.setFillColor(...light); doc.rect(111,y,85,30,"F");
+  doc.setTextColor(...blue); doc.setFontSize(9); doc.setFont("helvetica","bold");
+  doc.text("CLIENT", 114, y+6);
+  doc.setTextColor(...dark); doc.setFontSize(8); doc.setFont("helvetica","normal");
+  doc.text(client?.name || "—", 114, y+12);
+  doc.text(client?.email || "—", 114, y+17);
+  doc.text(client?.phone || "—", 114, y+22);
+  doc.text("Permis : " + (client?.license || "—"), 114, y+27);
+  y += 38;
+
+  // Détail
+  doc.setFillColor(...light); doc.rect(14,y,182,7,"F");
+  doc.setTextColor(...blue); doc.setFontSize(9); doc.setFont("helvetica","bold");
+  doc.text("DÉTAIL DE LA PRESTATION", 17, y+5); y += 12;
+  doc.setTextColor(...dark); doc.setFontSize(10); doc.setFont("helvetica","bold");
+  const lines = doc.splitTextToSize(facture.label || "Location véhicule", 178);
+  doc.text(lines, 14, y); y += lines.length * 6 + 4;
+  doc.setFontSize(9); doc.setFont("helvetica","normal"); doc.setTextColor(...gray);
+  doc.text(`Date d'émission : ${fmtD(facture.date)}`, 14, y);
+  if (facture.contractId) doc.text(`Réf. contrat : #${facture.contractId}`, 100, y);
+  y += 20;
+
+  // Tableau HT / TVA / TTC
+  const montantTTC = Number(facture.amount) || 0;
+  const montantHT = Math.round((montantTTC / 1.2) * 100) / 100;
+  const montantTVA = Math.round((montantTTC - montantHT) * 100) / 100;
+
+  doc.setFillColor(...light); doc.rect(100,y,96,8,"F");
+  doc.setTextColor(...gray); doc.setFontSize(8); doc.setFont("helvetica","normal");
+  doc.text("Montant HT", 104, y+5.5);
+  doc.setTextColor(...dark); doc.setFont("helvetica","bold");
+  doc.text(`${fmtN(montantHT)} €`, 192, y+5.5, { align: "right" });
+  y += 9;
+
+  doc.setFillColor(255,255,255); doc.rect(100,y,96,8,"F");
+  doc.setDrawColor(230,230,230); doc.setLineWidth(0.3);
+  doc.rect(100,y,96,8);
+  doc.setTextColor(...gray); doc.setFontSize(8); doc.setFont("helvetica","normal");
+  doc.text("TVA 20%", 104, y+5.5);
+  doc.setTextColor(...dark); doc.setFont("helvetica","bold");
+  doc.text(`${fmtN(montantTVA)} €`, 192, y+5.5, { align: "right" });
+  y += 10;
+
+  doc.setFillColor(...blue); doc.roundedRect(100,y,96,16,3,3,"F");
+  doc.setTextColor(255,255,255); doc.setFontSize(10); doc.setFont("helvetica","normal");
+  doc.text("TOTAL TTC", 104, y+7);
+  doc.setFontSize(16); doc.setFont("helvetica","bold");
+  doc.text(`${fmtN(montantTTC)} €`, 192, y+12, { align: "right" });
+  y += 26;
+
+  // Conditions paiement
+  doc.setFillColor(...light); doc.rect(14,y,182,20,"F");
+  doc.setTextColor(...gray); doc.setFontSize(8); doc.setFont("helvetica","normal");
+  doc.text("Conditions de règlement : Paiement à réception de facture.", 17, y+7);
+  doc.text("En cas de retard, des pénalités de 3x le taux légal seront appliquées.", 17, y+13);
+  y += 28;
+
+  // Pied de page
+  doc.setFillColor(...light); doc.rect(0,282,210,15,"F");
+  doc.setTextColor(...gray); doc.setFontSize(7); doc.setFont("helvetica","normal");
+  doc.text(`${AGENCE.nom} — SIRET ${AGENCE.siret} — ${AGENCE.adresse}, ${AGENCE.ville} — Tél : ${AGENCE.tel}`, 105, 289, { align:"center" });
+
+  const nomClient = (client?.name || "client").replace(/\s+/g,"-");
+  const dateStr = fmtD(facture.date).replace(/\//g,"-");
+  doc.save(`facture-${dateStr}_${nomClient}.pdf`);
 }
 
 export default function App() {
