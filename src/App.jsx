@@ -1093,6 +1093,75 @@ const TABS = [
 ];
 
 
+
+// ─── SAUVEGARDE BASE DE DONNÉES ───────────────────────────────────────────────
+function exportJSON(data) {
+  // Ajouter un résumé des pièces jointes
+  const piecesJointes = [];
+
+  (data.clients || []).forEach(c => {
+    if (c.permisRecto) piecesJointes.push({ type: "Client - Permis Recto", client: c.name, url: c.permisRecto });
+    if (c.permisVerso) piecesJointes.push({ type: "Client - Permis Verso", client: c.name, url: c.permisVerso });
+    if (c.carteIdRecto) piecesJointes.push({ type: "Client - CI Recto", client: c.name, url: c.carteIdRecto });
+    if (c.carteIdVerso) piecesJointes.push({ type: "Client - CI Verso", client: c.name, url: c.carteIdVerso });
+  });
+
+  (data.vehicles || []).forEach(v => {
+    if (v.docCarteGrise) piecesJointes.push({ type: "Véhicule - Carte grise", vehicule: `${v.brand} ${v.model}`, plaque: v.plate, url: v.docCarteGrise });
+    if (v.docAssurance) piecesJointes.push({ type: "Véhicule - Assurance", vehicule: `${v.brand} ${v.model}`, plaque: v.plate, url: v.docAssurance });
+    if (v.docControleTech) piecesJointes.push({ type: "Véhicule - CT", vehicule: `${v.brand} ${v.model}`, plaque: v.plate, url: v.docControleTech });
+  });
+
+  (data.maintenance || []).forEach(m => {
+    if (m.pj1) piecesJointes.push({ type: "Entretien - Doc 1", entretienId: m.id, url: m.pj1 });
+    if (m.pj2) piecesJointes.push({ type: "Entretien - Doc 2", entretienId: m.id, url: m.pj2 });
+    if (m.pj3) piecesJointes.push({ type: "Entretien - Doc 3", entretienId: m.id, url: m.pj3 });
+  });
+
+  (data.amendes || []).forEach(a => {
+    if (a.pieceJointe1) piecesJointes.push({ type: "Amende - Doc 1", amendeId: a.id, url: a.pieceJointe1 });
+    if (a.pieceJointe2) piecesJointes.push({ type: "Amende - Doc 2", amendeId: a.id, url: a.pieceJointe2 });
+    if (a.pieceJointe3) piecesJointes.push({ type: "Amende - Doc 3", amendeId: a.id, url: a.pieceJointe3 });
+  });
+
+  const exportData = {
+    ...data,
+    _meta: {
+      exportDate: new Date().toISOString(),
+      totalPiecesJointes: piecesJointes.length,
+    },
+    piecesJointes,
+  };
+
+  const json = JSON.stringify(exportData, null, 2);
+  const blob = new Blob([json], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `fleetmanager-backup-${new Date().toLocaleDateString("fr-FR").replace(/\//g,"-")}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportCSV(name, rows) {
+  if (!rows.length) return;
+  const headers = Object.keys(rows[0]);
+  const csvContent = [
+    headers.join(";"),
+    ...rows.map(row => headers.map(h => {
+      const val = row[h] ?? "";
+      return typeof val === "string" && val.includes(";") ? `"${val}"` : val;
+    }).join(";"))
+  ].join("\n");
+  const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${name}-${new Date().toLocaleDateString("fr-FR").replace(/\//g,"-")}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function CalendarView({ contracts, clients, vehicles, onContractClick }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState(null);
@@ -1195,18 +1264,42 @@ function CalendarView({ contracts, clients, vehicles, onContractClick }) {
                   const client = clients.find(x => x.id === c.clientId);
                   const vehicle = vehicles.find(x => x.id === c.vehicleId);
                   return (
-                    <div key={c.id} onClick={() => onContractClick(c)}
-                      style={{ background: "#f8f9fc", borderRadius: 10, padding: "10px 14px", borderLeft: `3px solid ${statusColor[c.status] || "#6b7280"}`, cursor: "pointer", transition: "all .15s" }}
-                      onMouseEnter={e => e.currentTarget.style.background = "#eff6ff"}
-                      onMouseLeave={e => e.currentTarget.style.background = "#f8f9fc"}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div key={c.id} style={{ background: "#f8f9fc", borderRadius: 10, padding: "12px 14px", borderLeft: `3px solid ${statusColor[c.status] || "#6b7280"}` }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                         <div>
-                          <p style={{ margin: "0 0 3px", fontWeight: 700, fontSize: 14 }}>#{c.id} — {client?.name} <span style={{ fontSize: 11, color: "#2563eb", fontWeight: 400 }}>→ Ouvrir</span></p>
+                          <p style={{ margin: "0 0 3px", fontWeight: 700, fontSize: 14 }}>#{c.id} — {client?.name}</p>
                           <p style={{ margin: "0 0 2px", fontSize: 12, color: "#6b7280" }}>🚗 {vehicle?.brand} {vehicle?.model} · {vehicle?.plate}</p>
                           <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>📅 {fmtDate(c.startDate)} → {fmtDate(c.endDate)} · 💶 {fmt(c.total)}€</p>
                         </div>
-                        <Badge status={c.status} />
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+                          <Badge status={c.status} />
+                          <button onClick={() => onContractClick(c)} style={{ background: "#eff6ff", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer", color: "#2563eb", fontSize: 11, fontWeight: 600 }}>✏️ Modifier</button>
+                        </div>
                       </div>
+                      {/* Pièces jointes du client */}
+                      {(client?.permisRecto || client?.permisVerso || client?.carteIdRecto || client?.carteIdVerso) && (
+                        <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 8, marginTop: 4 }}>
+                          <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase" }}>📎 Documents du client</p>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                            {[
+                              { label: "Permis Recto", url: client?.permisRecto, icon: "🪪" },
+                              { label: "Permis Verso", url: client?.permisVerso, icon: "🪪" },
+                              { label: "CI Recto", url: client?.carteIdRecto, icon: "🪪" },
+                              { label: "CI Verso", url: client?.carteIdVerso, icon: "🪪" },
+                            ].filter(d => d.url).map(d => (
+                              <a key={d.label} href={d.url} target="_blank" rel="noopener noreferrer"
+                                style={{ display: "flex", alignItems: "center", gap: 4, background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 6, padding: "4px 10px", textDecoration: "none", color: "#2563eb", fontSize: 11, fontWeight: 600 }}>
+                                {d.icon} {d.label} ↗
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {!client?.permisRecto && !client?.permisVerso && !client?.carteIdRecto && !client?.carteIdVerso && (
+                        <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 8, marginTop: 4 }}>
+                          <p style={{ margin: 0, fontSize: 11, color: "#9ca3af", fontStyle: "italic" }}>⚠️ Aucun document client enregistré</p>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1219,7 +1312,7 @@ function CalendarView({ contracts, clients, vehicles, onContractClick }) {
   );
 }
 
-function Dashboard({ vehicles, clients, contracts, onContractClick }) {
+function Dashboard({ vehicles, clients, contracts, maintenance, documents, factures, amendes, onContractClick, onBackup }) {
   const dispo = vehicles.filter(v => v.status === "disponible").length;
   const loue = vehicles.filter(v => v.status === "loué").length;
   const entretien = vehicles.filter(v => v.status === "entretien").length;
@@ -1282,6 +1375,22 @@ function Dashboard({ vehicles, clients, contracts, onContractClick }) {
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* SAUVEGARDE */}
+      <div style={{ background: "#fff", borderRadius: 14, border: "1px solid #f0f0f0", padding: "16px 20px", marginTop: 20, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+        <div>
+          <p style={{ margin: "0 0 2px", fontWeight: 700, fontSize: 14 }}>💾 Sauvegarde de la base de données</p>
+          <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>Exporte toutes vos données en cas de problème</p>
+        </div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button onClick={() => onBackup("json")} style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 8, padding: "8px 16px", cursor: "pointer", color: "#16a34a", fontSize: 13, fontWeight: 600 }}>
+            📄 Exporter JSON
+          </button>
+          <button onClick={() => onBackup("csv")} style={{ background: "#eff6ff", border: "1px solid #93c5fd", borderRadius: 8, padding: "8px 16px", cursor: "pointer", color: "#2563eb", fontSize: 13, fontWeight: 600 }}>
+            📊 Exporter CSV
+          </button>
         </div>
       </div>
 
@@ -2610,7 +2719,48 @@ export default function App() {
           </div>
         ) : (
           <>
-            {tab === "dashboard" && <Dashboard vehicles={vehicles} clients={clients} contracts={contracts} onContractClick={(c) => setModal({ type: "editContract", data: c })} />}
+            {tab === "dashboard" && <Dashboard
+              vehicles={vehicles} clients={clients} contracts={contracts}
+              maintenance={maintenance} documents={documents} factures={factures} amendes={amendes}
+              onContractClick={(c) => setModal({ type: "editContract", data: c })}
+              onBackup={(format) => {
+                const allData = { vehicles, clients, contracts, maintenance, documents, factures, amendes };
+                if (format === "json") {
+                  exportJSON(allData);
+                } else {
+                  exportCSV("vehicules", vehicles);
+                  exportCSV("clients", clients);
+                  exportCSV("contrats", contracts);
+                  exportCSV("entretiens", maintenance);
+                  exportCSV("factures", factures);
+                  exportCSV("amendes", amendes);
+                  // Export pièces jointes
+                  const pj = [];
+                  clients.forEach(c => {
+                    if (c.permisRecto) pj.push({ type: "Client - Permis Recto", nom: c.name, url: c.permisRecto });
+                    if (c.permisVerso) pj.push({ type: "Client - Permis Verso", nom: c.name, url: c.permisVerso });
+                    if (c.carteIdRecto) pj.push({ type: "Client - CI Recto", nom: c.name, url: c.carteIdRecto });
+                    if (c.carteIdVerso) pj.push({ type: "Client - CI Verso", nom: c.name, url: c.carteIdVerso });
+                  });
+                  vehicles.forEach(v => {
+                    if (v.docCarteGrise) pj.push({ type: "Véhicule - Carte grise", nom: `${v.brand} ${v.model}`, plaque: v.plate, url: v.docCarteGrise });
+                    if (v.docAssurance) pj.push({ type: "Véhicule - Assurance", nom: `${v.brand} ${v.model}`, plaque: v.plate, url: v.docAssurance });
+                    if (v.docControleTech) pj.push({ type: "Véhicule - CT", nom: `${v.brand} ${v.model}`, plaque: v.plate, url: v.docControleTech });
+                  });
+                  maintenance.forEach(m => {
+                    if (m.pj1) pj.push({ type: "Entretien Doc 1", id: m.id, url: m.pj1 });
+                    if (m.pj2) pj.push({ type: "Entretien Doc 2", id: m.id, url: m.pj2 });
+                    if (m.pj3) pj.push({ type: "Entretien Doc 3", id: m.id, url: m.pj3 });
+                  });
+                  amendes.forEach(a => {
+                    if (a.pieceJointe1) pj.push({ type: "Amende Doc 1", id: a.id, url: a.pieceJointe1 });
+                    if (a.pieceJointe2) pj.push({ type: "Amende Doc 2", id: a.id, url: a.pieceJointe2 });
+                    if (a.pieceJointe3) pj.push({ type: "Amende Doc 3", id: a.id, url: a.pieceJointe3 });
+                  });
+                  if (pj.length > 0) exportCSV("pieces-jointes", pj);
+                }
+              }}
+            />}
             {tab === "vehicles" && <Vehicles vehicles={vehicles} search={search} setModal={setModal} />}
             {tab === "clients" && <Clients clients={clients} contracts={contracts} search={search} setModal={setModal} />}
             {tab === "contracts" && <ContractsView contracts={contracts} clients={clients} vehicles={vehicles} search={search} setModal={setModal} onDelete={async (id) => { await supabase.from("contracts").delete().eq("id", id); await loadAll(true); notify("✅ Contrat supprimé !"); }} />}
