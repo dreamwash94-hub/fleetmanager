@@ -1929,6 +1929,21 @@ function AmendeForm({ init = {}, onClose, onSave, notify, contracts, clients, ve
   });
   const [saving, setSaving] = useState(false);
   const s = (k) => (e) => setF(p => ({ ...p, [k]: e.target.value }));
+
+  // Détection automatique du conducteur
+  const conducteurTrouve = React.useMemo(() => {
+    if (!f.vehicleId || !f.date) return null;
+    const contrat = contracts.find(c =>
+      Number(c.vehicleId) === Number(f.vehicleId) &&
+      c.startDate && c.endDate &&
+      new Date(f.date) >= new Date(c.startDate) &&
+      new Date(f.date) <= new Date(c.endDate)
+    );
+    if (!contrat) return null;
+    const client = clients.find(x => x.id === contrat.clientId);
+    return { client, contrat };
+  }, [f.vehicleId, f.date, contracts, clients]);
+
   const save = async () => {
     setSaving(true);
     const row = { contract_id: f.contractId ? Number(f.contractId) : null, client_id: Number(f.clientId), vehicle_id: Number(f.vehicleId), date: f.date, amount: Number(f.amount), description: f.description, reference: f.reference, status: f.status, notes: f.notes, piece_jointe_1: f.pieceJointe1, piece_jointe_2: f.pieceJointe2, piece_jointe_3: f.pieceJointe3, lien_antai: f.lienAntai || null, lien_fps: f.lienFps || null };
@@ -1940,16 +1955,47 @@ function AmendeForm({ init = {}, onClose, onSave, notify, contracts, clients, ve
   };
   return (
     <div>
+
+      {/* DÉTECTEUR AUTOMATIQUE DE CONDUCTEUR */}
+      <div style={{ marginBottom: 14 }}>
+        <p style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: .4 }}>🔍 Qui conduisait le véhicule ?</p>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 10 }}>
+          <Field label="Véhicule">
+            <select style={sel} value={f.vehicleId} onChange={s("vehicleId")}>
+              {vehicles.map(v=><option key={v.id} value={v.id}>{v.brand} {v.model} — {v.plate}</option>)}
+            </select>
+          </Field>
+          <Field label="Date de l'infraction">
+            <input style={inp} type="date" value={f.date} onChange={s("date")} />
+          </Field>
+        </div>
+        {conducteurTrouve ? (
+          <div style={{ background: "#d1fae5", border: "1.5px solid #6ee7b7", borderRadius: 10, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <p style={{ margin: "0 0 3px", fontWeight: 700, fontSize: 14, color: "#065f46" }}>✅ Conducteur identifié : {conducteurTrouve.client?.name}</p>
+              <p style={{ margin: 0, fontSize: 12, color: "#047857" }}>📋 Contrat #{conducteurTrouve.contrat.id} · du {fmtDate(conducteurTrouve.contrat.startDate)} au {fmtDate(conducteurTrouve.contrat.endDate)}</p>
+              <p style={{ margin: 0, fontSize: 12, color: "#047857" }}>📱 {conducteurTrouve.client?.phone} · ✉ {conducteurTrouve.client?.email}</p>
+            </div>
+            <button onClick={() => setF(p => ({ ...p, clientId: conducteurTrouve.client?.id, contractId: conducteurTrouve.contrat.id }))}
+              style={{ background: "#065f46", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", cursor: "pointer", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>
+              ✓ Appliquer
+            </button>
+          </div>
+        ) : f.vehicleId && f.date ? (
+          <div style={{ background: "#fef3c7", border: "1.5px solid #fcd34d", borderRadius: 10, padding: "10px 16px" }}>
+            <p style={{ margin: 0, fontSize: 13, color: "#92400e" }}>⚠️ Aucun contrat actif trouvé pour ce véhicule à cette date</p>
+          </div>
+        ) : null}
+      </div>
+
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <Field label="Client"><select style={sel} value={f.clientId} onChange={s("clientId")}>{clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
-        <Field label="Véhicule"><select style={sel} value={f.vehicleId} onChange={s("vehicleId")}>{vehicles.map(v=><option key={v.id} value={v.id}>{v.brand} {v.model} — {v.plate}</option>)}</select></Field>
         <Field label="Contrat lié (optionnel)">
           <select style={sel} value={f.contractId} onChange={s("contractId")}>
             <option value="">— Aucun —</option>
             {contracts.map(c=><option key={c.id} value={c.id}>Contrat #{c.id}</option>)}
           </select>
         </Field>
-        <Field label="Date"><input style={inp} type="date" value={f.date} onChange={s("date")} /></Field>
         <Field label="Montant (€)"><input style={inp} type="number" value={f.amount} onChange={s("amount")} placeholder="0" /></Field>
         <Field label="Référence"><input style={inp} value={f.reference} onChange={s("reference")} placeholder="N° avis de contravention" /></Field>
         <Field label="Statut"><select style={sel} value={f.status} onChange={s("status")}>{["en attente","payée","contestée","annulée"].map(o=><option key={o}>{o}</option>)}</select></Field>
@@ -1987,19 +2033,25 @@ function AmendeForm({ init = {}, onClose, onSave, notify, contracts, clients, ve
         <p style={{ margin: "0 0 10px", fontSize: 12, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: .4 }}>🔗 Liens officiels</p>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {[
-            { key: "lienAntai", label: "Lien ANTAI", icon: "🏛️", placeholder: "https://www.antai.gouv.fr/...", color: "#2563eb" },
-            { key: "lienFps", label: "Lien FPS (Forfait Post-Stationnement)", icon: "🅿️", placeholder: "https://fps.antai.gouv.fr/...", color: "#7c3aed" },
-          ].map(({ key, label, icon, placeholder, color }) => (
+            { key: "lienAntai", label: "ANTAI", icon: "🏛️", placeholder: "Coller le lien de votre amende ANTAI", color: "#2563eb", site: "https://www.antai.gouv.fr" },
+            { key: "lienFps", label: "FPS (Forfait Post-Stationnement)", icon: "🅿️", placeholder: "Coller le lien de votre FPS", color: "#7c3aed", site: "https://www.antai.gouv.fr/espace-prive/fps/saisir-reference" },
+          ].map(({ key, label, icon, placeholder, color, site }) => (
             <div key={key} style={{ background: "#f9fafb", border: "1.5px solid #e5e7eb", borderRadius: 8, padding: "12px 14px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                 <span>{icon}</span>
                 <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: "#374151" }}>{label}</p>
-                {f[key] && (
-                  <a href={f[key]} target="_blank" rel="noopener noreferrer"
-                    style={{ marginLeft: "auto", fontSize: 11, color: color, fontWeight: 600, textDecoration: "none", background: color + "15", padding: "2px 8px", borderRadius: 5 }}>
-                    🔗 Ouvrir
+                <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+                  <a href={site} target="_blank" rel="noopener noreferrer"
+                    style={{ fontSize: 11, color: color, fontWeight: 600, textDecoration: "none", background: color + "15", padding: "3px 10px", borderRadius: 5, border: "1px solid " + color + "30" }}>
+                    🌐 Site officiel
                   </a>
-                )}
+                  {f[key] && (
+                    <a href={f[key]} target="_blank" rel="noopener noreferrer"
+                      style={{ fontSize: 11, color: "#fff", fontWeight: 600, textDecoration: "none", background: color, padding: "3px 10px", borderRadius: 5 }}>
+                      🔗 Mon amende
+                    </a>
+                  )}
+                </div>
               </div>
               <input style={{ ...inp, fontSize: 12 }} value={f[key]} onChange={e => setF(p => ({ ...p, [key]: e.target.value }))} placeholder={placeholder} />
             </div>
@@ -2167,6 +2219,79 @@ function generateFacturePDFAuto({ facture, client }) {
   doc.save(`facture-${dateStr}_${nomClient}.pdf`);
 }
 
+
+function GlobalSearchResults({ query, vehicles, clients, contracts, setTab, setGlobalSearch, setShowGlobalResults }) {
+  if (!query || query.length < 2) return null;
+  const q = query.toLowerCase();
+
+  const matchVehicles = vehicles.filter(v => [v.brand, v.model, v.plate, v.category].some(f => f?.toLowerCase().includes(q)));
+  const matchClients = clients.filter(c => [c.name, c.email, c.phone, c.license].some(f => f?.toLowerCase().includes(q)));
+  const matchContracts = contracts.filter(c => [String(c.id)].some(f => f?.includes(q)));
+
+  const total = matchVehicles.length + matchClients.length + matchContracts.length;
+
+  if (total === 0) return (
+    <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", borderRadius: 12, boxShadow: "0 8px 32px rgba(0,0,0,.15)", zIndex: 9999, padding: 16, marginTop: 6 }}>
+      <p style={{ margin: 0, color: "#9ca3af", fontSize: 13, textAlign: "center" }}>Aucun résultat pour "{query}"</p>
+    </div>
+  );
+
+  const close = () => { setGlobalSearch(""); setShowGlobalResults(false); };
+
+  return (
+    <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", borderRadius: 12, boxShadow: "0 8px 32px rgba(0,0,0,.15)", zIndex: 9999, padding: 12, marginTop: 6, maxHeight: 400, overflow: "auto" }}>
+      {matchVehicles.length > 0 && (
+        <div style={{ marginBottom: 10 }}>
+          <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase" }}>🚗 Véhicules ({matchVehicles.length})</p>
+          {matchVehicles.map(v => (
+            <div key={v.id} onClick={() => { setTab("vehicles"); close(); }}
+              style={{ padding: "8px 10px", borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}
+              onMouseEnter={e => e.currentTarget.style.background = "#f8f9fc"}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+              <span style={{ fontSize: 20 }}>{v.image}</span>
+              <div>
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 700 }}>{v.brand} {v.model}</p>
+                <p style={{ margin: 0, fontSize: 11, color: "#6b7280" }}>{v.plate} · {v.status}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {matchClients.length > 0 && (
+        <div style={{ marginBottom: 10 }}>
+          <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase" }}>👤 Clients ({matchClients.length})</p>
+          {matchClients.map(c => (
+            <div key={c.id} onClick={() => { setTab("clients"); close(); }}
+              style={{ padding: "8px 10px", borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}
+              onMouseEnter={e => e.currentTarget.style.background = "#f8f9fc"}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+              <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(135deg, #2563eb, #7c3aed)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 14 }}>{c.name?.charAt(0)}</div>
+              <div>
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 700 }}>{c.name}</p>
+                <p style={{ margin: 0, fontSize: 11, color: "#6b7280" }}>{c.email} · {c.phone}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {matchContracts.length > 0 && (
+        <div>
+          <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase" }}>📋 Contrats ({matchContracts.length})</p>
+          {matchContracts.map(c => (
+            <div key={c.id} onClick={() => { setTab("contracts"); close(); }}
+              style={{ padding: "8px 10px", borderRadius: 8, cursor: "pointer" }}
+              onMouseEnter={e => e.currentTarget.style.background = "#f8f9fc"}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 700 }}>Contrat #{c.id}</p>
+              <p style={{ margin: 0, fontSize: 11, color: "#6b7280" }}>{fmtDate(c.startDate)} → {fmtDate(c.endDate)} · {fmt(c.total)}€</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   const [unlocked, setUnlocked] = useState(false);
   const [tab, setTab] = useState("dashboard");
@@ -2179,6 +2304,8 @@ export default function App() {
   const [amendes, setAmendes] = useState([]);
   const [modal, setModal] = useState(null);
   const [search, setSearch] = useState("");
+  const [globalSearch, setGlobalSearch] = useState("");
+  const [showGlobalResults, setShowGlobalResults] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saveMsg, setSaveMsg] = useState("");
 
@@ -2270,6 +2397,23 @@ export default function App() {
             <span style={{ fontSize: 26 }}>🚘</span>
             <span className="fm-logo-text" style={{ color: "#fff", fontWeight: 900, fontSize: 18 }}>FleetManager</span>
           </div>
+          {/* RECHERCHE GLOBALE */}
+          <div style={{ position: "relative", flex: 1, maxWidth: 340, margin: "0 16px" }}>
+            <div style={{ display: "flex", alignItems: "center", background: "rgba(255,255,255,0.12)", borderRadius: 10, padding: "6px 12px", gap: 8 }}>
+              <span style={{ fontSize: 14 }}>🔍</span>
+              <input
+                value={globalSearch}
+                onChange={e => { setGlobalSearch(e.target.value); setShowGlobalResults(true); }}
+                onFocus={() => setShowGlobalResults(true)}
+                onBlur={() => setTimeout(() => setShowGlobalResults(false), 200)}
+                placeholder="Rechercher partout..."
+                style={{ background: "transparent", border: "none", outline: "none", color: "#fff", fontSize: 13, width: "100%", "::placeholder": { color: "rgba(255,255,255,0.5)" } }}
+              />
+              {globalSearch && <button onClick={() => { setGlobalSearch(""); setShowGlobalResults(false); }} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.6)", cursor: "pointer", fontSize: 16, padding: 0 }}>×</button>}
+            </div>
+            {showGlobalResults && <GlobalSearchResults query={globalSearch} vehicles={vehicles} clients={clients} contracts={contracts} setTab={setTab} setGlobalSearch={setGlobalSearch} setShowGlobalResults={setShowGlobalResults} />}
+          </div>
+
           <nav className="fm-top-nav" style={{ gap: 2, flexWrap: "wrap", justifyContent: "center" }}>
             {TABS.map(t => (
               <button key={t.id} onClick={() => { setTab(t.id); setSearch(""); }}
