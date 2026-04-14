@@ -1237,7 +1237,7 @@ function Clients({ clients, contracts, search, setModal }) {
   );
 }
 
-function ContractsView({ contracts, clients, vehicles, search, setModal }) {
+function ContractsView({ contracts, clients, vehicles, search, setModal, onDelete }) {
   const filtered = contracts.filter(c => {
     const client = clients.find(x => x.id === c.clientId);
     const vehicle = vehicles.find(x => x.id === c.vehicleId);
@@ -1287,6 +1287,7 @@ function ContractsView({ contracts, clients, vehicles, search, setModal }) {
                   generateFacturePDFAuto({ facture: factureTemp, client });
                 }} style={{ background: "#fdf4ff", border: "none", borderRadius: 7, padding: "6px 12px", cursor: "pointer", color: "#7c3aed", fontSize: 13, fontWeight: 600 }}>🧾 Facture PDF</button>
                 <button onClick={() => setModal({ type: "editContract", data: c })} style={{ background: "#eff6ff", border: "none", borderRadius: 7, padding: "6px 12px", cursor: "pointer", color: "#2563eb", fontSize: 13, fontWeight: 600 }}>Modifier</button>
+                <button onClick={() => { if (window.confirm(`Supprimer le contrat #${c.id} ?`)) onDelete(c.id); }} style={{ background: "#fee2e2", border: "none", borderRadius: 7, padding: "6px 12px", cursor: "pointer", color: "#dc2626", fontSize: 13, fontWeight: 600 }}>🗑 Supprimer</button>
               </div>
             </div>
           </div>
@@ -2315,7 +2316,7 @@ export default function App() {
             {tab === "dashboard" && <Dashboard vehicles={vehicles} clients={clients} contracts={contracts} />}
             {tab === "vehicles" && <Vehicles vehicles={vehicles} search={search} setModal={setModal} />}
             {tab === "clients" && <Clients clients={clients} contracts={contracts} search={search} setModal={setModal} />}
-            {tab === "contracts" && <ContractsView contracts={contracts} clients={clients} vehicles={vehicles} search={search} setModal={setModal} />}
+            {tab === "contracts" && <ContractsView contracts={contracts} clients={clients} vehicles={vehicles} search={search} setModal={setModal} onDelete={async (id) => { await supabase.from("contracts").delete().eq("id", id); await loadAll(true); notify("✅ Contrat supprimé !"); }} />}
             {tab === "maintenance" && <MaintenanceView maintenance={maintenance} vehicles={vehicles} search={search} setModal={setModal} />}
             {tab === "insurance" && <Insurance vehicles={vehicles} />}
             {tab === "documents" && <DocumentsView documents={documents} setModal={setModal} />}
