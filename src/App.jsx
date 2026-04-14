@@ -2609,16 +2609,17 @@ export default function App() {
     <ErrorBoundary>
     <style>{`
       @media (max-width: 768px) {
-        .fm-header { padding: 0 12px !important; }
+        .fm-header { padding: 0 8px !important; }
         .fm-logo-text { display: none; }
         .fm-status { display: none !important; }
-        .fm-content { padding: 12px !important; }
-        .fm-title-bar { flex-direction: column !important; align-items: flex-start !important; gap: 10px !important; }
+        .fm-content { padding: 10px !important; }
+        .fm-title-bar { flex-direction: column !important; align-items: flex-start !important; gap: 8px !important; }
         .fm-search-bar { width: 100% !important; }
         .fm-search-bar input { width: 100% !important; flex: 1 !important; }
         .fm-bottom-nav { display: flex !important; }
         .fm-top-nav { display: none !important; }
         .fm-add-btn span { display: none; }
+        .fm-global-search { max-width: 160px !important; }
       }
       @media (min-width: 769px) {
         .fm-bottom-nav { display: none !important; }
@@ -2626,24 +2627,26 @@ export default function App() {
         .fm-add-btn span { display: inline; }
       }
       .fm-bottom-nav {
-        position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+        position: fixed; bottom: 0; left: 0; right: 0; z-index: 1000;
         background: #fff; border-top: 1px solid #e5e7eb;
-        padding: 6px 0 env(safe-area-inset-bottom, 6px);
+        padding: 4px 0; padding-bottom: env(safe-area-inset-bottom, 4px);
         justify-content: space-around; align-items: center;
+        overflow-x: auto; -webkit-overflow-scrolling: touch;
       }
       .fm-bottom-nav button {
-        display: flex; flex-direction: column; align-items: center; gap: 2px;
+        display: flex; flex-direction: column; align-items: center; gap: 1px;
         border: none; background: transparent; cursor: pointer;
-        padding: 4px 6px; border-radius: 8px; flex: 1; max-width: 70px;
+        padding: 4px 8px; border-radius: 8px; flex-shrink: 0;
+        min-width: 56px;
       }
-      .fm-bottom-nav button span.icon { font-size: 20px; line-height: 1; }
-      .fm-bottom-nav button span.label { font-size: 9px; font-weight: 600; color: #9ca3af; }
+      .fm-bottom-nav button span.icon { font-size: 22px; line-height: 1.2; }
+      .fm-bottom-nav button span.label { font-size: 9px; font-weight: 600; color: #9ca3af; white-space: nowrap; }
       .fm-bottom-nav button.active span.label { color: #2563eb; }
-      .fm-bottom-nav button.active { background: #eff6ff; }
-      .fm-mobile-pb { padding-bottom: 80px; }
+      .fm-bottom-nav button.active { background: #eff6ff; border-radius: 10px; }
+      .fm-mobile-pb { padding-bottom: 90px; }
       @media (min-width: 769px) { .fm-mobile-pb { padding-bottom: 0; } }
     `}</style>
-    <div style={{ fontFamily: "'DM Sans', 'Segoe UI', sans-serif", background: "#f8f9fc", minHeight: "100vh" }}>
+    <div style={{ fontFamily: "'DM Sans', 'Segoe UI', sans-serif", background: "#f8f9fc", minHeight: "100vh", overflowX: "hidden", WebkitOverflowScrolling: "touch" }}>
       {saveMsg && <div style={{ position: "fixed", top: 16, left: "50%", transform: "translateX(-50%)", zIndex: 9999, background: "#111", color: "#fff", padding: "12px 20px", borderRadius: 10, fontSize: 14, fontWeight: 600, whiteSpace: "nowrap" }}>{saveMsg}</div>}
 
       {/* HEADER */}
