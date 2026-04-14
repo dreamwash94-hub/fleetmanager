@@ -1924,8 +1924,8 @@ function AmendeForm({ init = {}, onClose, onSave, notify, contracts, clients, ve
     pieceJointe1: init.pieceJointe1 || null,
     pieceJointe2: init.pieceJointe2 || null,
     pieceJointe3: init.pieceJointe3 || null,
-    lienAntai: init.lienAntai || "",
-    lienFps: init.lienFps || "",
+    lienAntai: init.lienAntai || "https://www.antai.gouv.fr",
+    lienFps: init.lienFps || "https://www.antai.gouv.fr/espace-prive/fps/saisir-reference",
   });
   const [saving, setSaving] = useState(false);
   const s = (k) => (e) => setF(p => ({ ...p, [k]: e.target.value }));
