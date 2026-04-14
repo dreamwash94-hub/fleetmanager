@@ -1,6 +1,11 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { jsPDF } from "jspdf";
+import emailjs from "@emailjs/browser";
+
+const EMAILJS_SERVICE_ID = "service_pecb087";
+const EMAILJS_TEMPLATE_ID = "1lu8wur";
+const EMAILJS_PUBLIC_KEY = "AfQcNqQc7-e5llQPw";
 
 
 const AGENCE = {
@@ -680,38 +685,63 @@ function ContractForm({ init = {}, onClose, onSave, notify, vehicles, clients })
     onClose();
     await onSave();
     notify("✅ Contrat enregistré ! PDF téléchargé.");
-    // Ouvrir modal envoi email
-    const emailClient = clientForPdf?.email || "";
-    const sujet = encodeURIComponent(`Votre contrat de location — ${vehicleForPdf?.brand} ${vehicleForPdf?.model}`);
-    const corps = encodeURIComponent(`Bonjour ${clientForPdf?.name || ""},
-
-Veuillez trouver ci-joint votre contrat de location pour le véhicule ${vehicleForPdf?.brand} ${vehicleForPdf?.model} (${vehicleForPdf?.plate}).
-
-Dates : du ${new Date(f.startDate).toLocaleDateString("fr-FR")} au ${new Date(f.endDate).toLocaleDateString("fr-FR")}
-Montant total : ${Number(f.totalManuel !== "" ? f.totalManuel : total).toLocaleString("fr-FR")} €
-
-Cordialement,
-FleetManager`);
-    if (emailClient) {
-      window.open(`mailto:${emailClient}?subject=${sujet}&body=${corps}`, "_blank");
+    // Envoi automatique par EmailJS si le client a un email
+    if (clientForPdf?.email) {
+      const montant = Number(f.totalManuel !== "" ? f.totalManuel : total).toLocaleString("fr-FR");
+      const vehicule = `${vehicleForPdf?.brand || ""} ${vehicleForPdf?.model || ""} (${vehicleForPdf?.plate || ""})`;
+      emailjs.send(
+        EMAILJS_SERVICE_ID,
+        EMAILJS_TEMPLATE_ID,
+        {
+          client_name: clientForPdf.name || "",
+          email: clientForPdf.email,
+          vehicule,
+          date_debut: new Date(f.startDate).toLocaleDateString("fr-FR"),
+          date_fin: new Date(f.endDate).toLocaleDateString("fr-FR"),
+          montant,
+          name: "BAMEVENT",
+          message: `Contrat de location — ${vehicule}`,
+          title: `Contrat ${vehicule}`,
+        },
+        EMAILJS_PUBLIC_KEY
+      ).then(() => notify("✅ Contrat enregistré ! PDF + mail envoyé à " + clientForPdf.email))
+       .catch(() => notify("✅ Contrat enregistré ! (échec envoi mail)"));
     }
   };
 
   const sendEmailJs = async (to) => {
     const clientForPdf = clients.find(x => x.id === Number(f.clientId));
     const vehicleForPdf = vehicles.find(x => x.id === Number(f.vehicleId));
-    const sujet = encodeURIComponent(`Votre contrat de location — ${vehicleForPdf?.brand} ${vehicleForPdf?.model}`);
-    const corps = encodeURIComponent(`Bonjour ${clientForPdf?.name || ""},
+    const montant = Number(f.totalManuel !== "" ? f.totalManuel : total).toLocaleString("fr-FR");
+    const dateDebut = new Date(f.startDate).toLocaleDateString("fr-FR");
+    const dateFin = new Date(f.endDate).toLocaleDateString("fr-FR");
+    const vehicule = `${vehicleForPdf?.brand || ""} ${vehicleForPdf?.model || ""} (${vehicleForPdf?.plate || ""})`;
 
-Veuillez trouver ci-joint votre contrat de location.
-
-Véhicule : ${vehicleForPdf?.brand} ${vehicleForPdf?.model} (${vehicleForPdf?.plate})
-Dates : du ${new Date(f.startDate).toLocaleDateString("fr-FR")} au ${new Date(f.endDate).toLocaleDateString("fr-FR")}
-Montant total : ${Number(f.totalManuel !== "" ? f.totalManuel : total).toLocaleString("fr-FR")} €
-
-Cordialement,
-FleetManager`);
-    window.open(`mailto:${to}?subject=${sujet}&body=${corps}`, "_blank");
+    try {
+      notify("📤 Envoi en cours...");
+      await emailjs.send(
+        EMAILJS_SERVICE_ID,
+        EMAILJS_TEMPLATE_ID,
+        {
+          client_name: clientForPdf?.name || "",
+          email: to,
+          vehicule,
+          date_debut: dateDebut,
+          date_fin: dateFin,
+          montant,
+          name: "BAMEVENT",
+          message: `Contrat de location — ${vehicule}
+Du ${dateDebut} au ${dateFin}
+Montant : ${montant} €`,
+          title: `Contrat ${vehicule}`,
+        },
+        EMAILJS_PUBLIC_KEY
+      );
+      notify("✅ Mail envoyé à " + to + " !");
+    } catch (err) {
+      console.error("EmailJS error:", err);
+      notify("❌ Erreur envoi mail — " + (err?.text || err?.message || "vérifiez EmailJS"));
+    }
   };
   return (
     <div>
