@@ -387,28 +387,50 @@ async function uploadFile(file, folder = "divers") {
 
 function FileUploadBtn({ label, icon, value, folderName, onUploaded, onRemove }) {
   const [uploading, setUploading] = useState(false);
+
+  const handleFile = async (file) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const url = await uploadFile(file, folderName);
+      onUploaded(url);
+    } catch(err) {
+      alert("Erreur upload : " + err.message);
+    } finally { setUploading(false); }
+  };
+
   return (
     <div style={{ background: "#f9fafb", border: "1.5px dashed " + (value ? "#93c5fd" : "#e5e7eb"), borderRadius: 8, padding: "10px 14px" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: value ? 4 : 0 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: value ? 6 : 0 }}>
         <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: "#374151" }}>{icon} {label}</p>
-        <div style={{ display: "flex", gap: 6 }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {/* Bouton galerie/fichier */}
           <label style={{ cursor: uploading ? "wait" : "pointer" }}>
             <input type="file" style={{ display: "none" }} accept=".pdf,.jpg,.jpeg,.png"
-              onChange={async (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                setUploading(true);
-                try {
-                  const url = await uploadFile(file, folderName);
-                  onUploaded(url);
-                } catch(err) {
-                  alert("Erreur upload : " + err.message);
-                } finally { setUploading(false); }
-              }} />
-            <span style={{ background: uploading ? "#f3f4f6" : value ? "#eff6ff" : "#f3f4f6", color: uploading ? "#9ca3af" : value ? "#2563eb" : "#6b7280", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: uploading ? "wait" : "pointer" }}>
-              {uploading ? "⏳..." : value ? "Changer" : "Ajouter"}
+              onChange={(e) => handleFile(e.target.files[0])} />
+            <span style={{ background: value ? "#eff6ff" : "#f3f4f6", color: value ? "#2563eb" : "#6b7280", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+              {uploading ? "⏳..." : value ? "Changer" : "📁 Fichier"}
             </span>
           </label>
+          {/* Bouton caméra (scanner) */}
+          {!value && (
+            <label style={{ cursor: uploading ? "wait" : "pointer" }}>
+              <input type="file" style={{ display: "none" }} accept="image/*" capture="environment"
+                onChange={(e) => handleFile(e.target.files[0])} />
+              <span style={{ background: "#f0fdf4", color: "#16a34a", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", border: "1px solid #86efac" }}>
+                📷 Scanner
+              </span>
+            </label>
+          )}
+          {value && (
+            <label style={{ cursor: "pointer" }}>
+              <input type="file" style={{ display: "none" }} accept="image/*" capture="environment"
+                onChange={(e) => handleFile(e.target.files[0])} />
+              <span style={{ background: "#f0fdf4", color: "#16a34a", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", border: "1px solid #86efac" }}>
+                📷
+              </span>
+            </label>
+          )}
           {value && <button onClick={onRemove} style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 6, padding: "4px 8px", cursor: "pointer", fontSize: 11 }}>✕</button>}
         </div>
       </div>
@@ -901,16 +923,22 @@ Montant : ${montant} €`,
         {showSignaturePad && (
           <div style={{ border: "1.5px solid #93c5fd", borderRadius: 8, overflow: "hidden", background: "#fff", position: "relative" }}>
             <canvas
-              width={534} height={120}
-              style={{ width: "100%", height: 120, cursor: "crosshair", display: "block", touchAction: "none" }}
+              width={1068} height={240}
+              style={{ width: "100%", height: 160, cursor: "crosshair", display: "block", touchAction: "none", borderRadius: "0 0 0 0" }}
               ref={el => {
                 if (el && !signatureRef.canvas) {
                   signatureRef.canvas = el;
-                  signatureRef.ctx = el.getContext("2d");
-                  signatureRef.ctx.strokeStyle = "#1d4ed8";
-                  signatureRef.ctx.lineWidth = 2.5;
-                  signatureRef.ctx.lineCap = "round";
-                  signatureRef.ctx.lineJoin = "round";
+                  const ctx = el.getContext("2d");
+                  signatureRef.ctx = ctx;
+                  ctx.strokeStyle = "#1d4ed8";
+                  ctx.lineWidth = 3;
+                  ctx.lineCap = "round";
+                  ctx.lineJoin = "round";
+                  ctx.shadowColor = "#2563eb";
+                  ctx.shadowBlur = 1;
+
+                  let lastX = 0, lastY = 0;
+
                   const getPos = (e) => {
                     const rect = el.getBoundingClientRect();
                     const scaleX = el.width / rect.width;
@@ -918,10 +946,42 @@ Montant : ${montant} €`,
                     const src = e.touches ? e.touches[0] : e;
                     return { x: (src.clientX - rect.left) * scaleX, y: (src.clientY - rect.top) * scaleY };
                   };
-                  el.onmousedown = el.ontouchstart = (e) => { e.preventDefault(); signatureRef.drawing = true; const p = getPos(e); signatureRef.ctx.beginPath(); signatureRef.ctx.moveTo(p.x, p.y); };
-                  el.onmousemove = el.ontouchmove = (e) => { e.preventDefault(); if (!signatureRef.drawing) return; const p = getPos(e); signatureRef.ctx.lineTo(p.x, p.y); signatureRef.ctx.stroke(); };
-                  el.onmouseup = el.onmouseleave = el.ontouchend = () => { signatureRef.drawing = false; };
-                } else if (!el) { signatureRef.canvas = null; }
+
+                  const startDraw = (e) => {
+                    e.preventDefault();
+                    signatureRef.drawing = true;
+                    const p = getPos(e);
+                    lastX = p.x; lastY = p.y;
+                    ctx.beginPath();
+                    ctx.moveTo(p.x, p.y);
+                  };
+
+                  const draw = (e) => {
+                    e.preventDefault();
+                    if (!signatureRef.drawing) return;
+                    const p = getPos(e);
+                    ctx.beginPath();
+                    ctx.moveTo(lastX, lastY);
+                    ctx.lineTo(p.x, p.y);
+                    ctx.stroke();
+                    lastX = p.x; lastY = p.y;
+                  };
+
+                  const stopDraw = (e) => {
+                    e.preventDefault();
+                    signatureRef.drawing = false;
+                  };
+
+                  el.addEventListener("mousedown", startDraw, { passive: false });
+                  el.addEventListener("mousemove", draw, { passive: false });
+                  el.addEventListener("mouseup", stopDraw, { passive: false });
+                  el.addEventListener("mouseleave", stopDraw, { passive: false });
+                  el.addEventListener("touchstart", startDraw, { passive: false });
+                  el.addEventListener("touchmove", draw, { passive: false });
+                  el.addEventListener("touchend", stopDraw, { passive: false });
+                } else if (!el) {
+                  signatureRef.canvas = null;
+                }
               }}
             />
             <div style={{ display: "flex", gap: 8, padding: "8px 10px", borderTop: "1px solid #e5e7eb", background: "#f9fafb" }}>
@@ -1040,6 +1100,7 @@ function DocumentForm({ init = {}, onClose, onSave, notify }) {
     uploadDate: init.uploadDate || new Date().toISOString().slice(0, 10)
   });
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const s = (k) => (e) => setF(p => ({ ...p, [k]: e.target.value }));
   const save = async () => {
     setSaving(true);
@@ -1063,10 +1124,52 @@ function DocumentForm({ init = {}, onClose, onSave, notify }) {
         <Field label="Date d'ajout"><input style={inp} type="date" value={f.uploadDate} onChange={s("uploadDate")} /></Field>
       </div>
       <Field label="Fichier">
-        <div style={{ border: "2px dashed #e5e7eb", borderRadius: 10, padding: 18, textAlign: "center", cursor: "pointer", background: "#fafafa" }}
-          onClick={() => setF(p => ({ ...p, fileName: "doc_" + Date.now() + ".pdf" }))}>
-          <p style={{ margin: 0, fontSize: 22 }}>📎</p>
-          <p style={{ margin: "6px 0 0", fontSize: 13, color: "#6b7280" }}>{f.fileName ? `✅ ${f.fileName}` : "Cliquer pour attacher"}</p>
+        <div style={{ border: "2px dashed " + (f.fileName ? "#93c5fd" : "#e5e7eb"), borderRadius: 10, padding: 16, background: "#fafafa" }}>
+          {f.fileName ? (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <a href={f.fileName} target="_blank" rel="noopener noreferrer"
+                style={{ display: "flex", alignItems: "center", gap: 8, color: "#2563eb", textDecoration: "none", fontSize: 13, fontWeight: 600 }}>
+                📎 Voir le document ↗
+              </a>
+              <button onClick={() => setF(p => ({ ...p, fileName: null }))}
+                style={{ background: "#fee2e2", color: "#dc2626", border: "none", borderRadius: 6, padding: "4px 8px", cursor: "pointer", fontSize: 12 }}>✕ Retirer</button>
+            </div>
+          ) : (
+            <div style={{ textAlign: "center" }}>
+              <p style={{ margin: "0 0 12px", fontSize: 22 }}>📎</p>
+              <p style={{ margin: "0 0 12px", fontSize: 13, color: "#9ca3af" }}>Choisir un fichier ou prendre une photo</p>
+              <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+                <label style={{ cursor: uploading ? "wait" : "pointer" }}>
+                  <input type="file" style={{ display: "none" }} accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                    onChange={async (e) => {
+                      const file = e.target.files[0];
+                      if (!file) return;
+                      setUploading(true);
+                      try { const url = await uploadFile(file, "documents-onglet"); setF(p => ({ ...p, fileName: url })); }
+                      catch(err) { notify("❌ Erreur upload : " + err.message); }
+                      finally { setUploading(false); }
+                    }} />
+                  <span style={{ background: "#eff6ff", color: "#2563eb", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", border: "1px solid #93c5fd" }}>
+                    {uploading ? "⏳ Envoi..." : "📁 Fichier / Galerie"}
+                  </span>
+                </label>
+                <label style={{ cursor: uploading ? "wait" : "pointer" }}>
+                  <input type="file" style={{ display: "none" }} accept="image/*" capture="environment"
+                    onChange={async (e) => {
+                      const file = e.target.files[0];
+                      if (!file) return;
+                      setUploading(true);
+                      try { const url = await uploadFile(file, "documents-onglet"); setF(p => ({ ...p, fileName: url })); }
+                      catch(err) { notify("❌ Erreur upload : " + err.message); }
+                      finally { setUploading(false); }
+                    }} />
+                  <span style={{ background: "#f0fdf4", color: "#16a34a", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", border: "1px solid #86efac" }}>
+                    📷 Scanner / Photo
+                  </span>
+                </label>
+              </div>
+            </div>
+          )}
         </div>
       </Field>
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8 }}>
@@ -1079,17 +1182,17 @@ function DocumentForm({ init = {}, onClose, onSave, notify }) {
 
 // ─── VUES ─────────────────────────────────────────────────────────────────────
 
-const TABS = [
-  { id: "dashboard", label: "Tableau de bord", icon: "📊" },
-  { id: "vehicles", label: "Véhicules", icon: "🚗" },
-  { id: "clients", label: "Clients", icon: "👤" },
-  { id: "contracts", label: "Contrats", icon: "📋" },
-  { id: "maintenance", label: "Entretien", icon: "🔧" },
-  { id: "insurance", label: "Assurance", icon: "🛡️" },
-  { id: "documents", label: "Documents", icon: "🗂️" },
-  { id: "factures", label: "Factures", icon: "🧾" },
-  { id: "comptabilite", label: "Comptabilité", icon: "📈" },
-  { id: "amendes", label: "Amendes", icon: "🚨" },
+const ALL_TABS = [
+  { id: "dashboard", label: "Tableau de bord", icon: "📊", roles: ["patron"] },
+  { id: "vehicles", label: "Véhicules", icon: "🚗", roles: ["patron"] },
+  { id: "clients", label: "Clients", icon: "👤", roles: ["patron", "salarie"] },
+  { id: "contracts", label: "Contrats", icon: "📋", roles: ["patron", "salarie"] },
+  { id: "maintenance", label: "Entretien", icon: "🔧", roles: ["patron"] },
+  { id: "insurance", label: "Assurance", icon: "🛡️", roles: ["patron"] },
+  { id: "documents", label: "Documents", icon: "🗂️", roles: ["patron"] },
+  { id: "factures", label: "Factures", icon: "🧾", roles: ["patron"] },
+  { id: "comptabilite", label: "Comptabilité", icon: "📈", roles: ["patron"] },
+  { id: "amendes", label: "Amendes", icon: "🚨", roles: ["patron"] },
 ];
 
 
@@ -1720,7 +1823,9 @@ function DocumentsView({ documents, setModal }) {
 // ─── APP PRINCIPAL ─────────────────────────────────────────────────────────────
 
 
-const CORRECT_PIN = "1234"; // ← Change ce code ici
+const PIN_PATRON_1 = "9313";  // ← Code patron 1
+const PIN_PATRON_2 = "1905";  // ← Code patron 2
+const PIN_SALARIE = "9320";   // ← Code salarié (contrats + clients uniquement)
 
 function PinLock({ onUnlock }) {
   const [pin, setPin] = useState("");
@@ -1734,8 +1839,10 @@ function PinLock({ onUnlock }) {
     setError(false);
     if (newPin.length === 4) {
       setTimeout(() => {
-        if (newPin === CORRECT_PIN) {
-          onUnlock();
+        if (newPin === PIN_PATRON_1 || newPin === PIN_PATRON_2) {
+          onUnlock("patron");
+        } else if (newPin === PIN_SALARIE) {
+          onUnlock("salarie");
         } else {
           setShake(true);
           setError(true);
@@ -2550,6 +2657,7 @@ function GlobalSearchResults({ query, vehicles, clients, contracts, setTab, setG
 
 export default function App() {
   const [unlocked, setUnlocked] = useState(false);
+  const [role, setRole] = useState("patron"); // "patron" ou "salarie"
   const [tab, setTab] = useState("dashboard");
   const [vehicles, setVehicles] = useState([]);
   const [clients, setClients] = useState([]);
@@ -2592,6 +2700,8 @@ export default function App() {
   const closeModal = useCallback(() => setModal(null), []);
   const refresh = useCallback(() => loadAll(true), [loadAll]);
 
+  const TABS = ALL_TABS.filter(t => t.roles.includes(role));
+
   const ADD_CONFIG = {
     vehicles: { label: "Ajouter un véhicule", modal: "addVehicle" },
     clients: { label: "Nouveau client", modal: "addClient" },
@@ -2603,7 +2713,7 @@ export default function App() {
   };
   const currentAdd = ADD_CONFIG[tab];
 
-  if (!unlocked) return <PinLock onUnlock={() => setUnlocked(true)} />;
+  if (!unlocked) return <PinLock onUnlock={(r) => { setRole(r); setUnlocked(true); }} />;
 
   return (
     <ErrorBoundary>
@@ -2688,6 +2798,9 @@ export default function App() {
             ))}
           </nav>
           <div className="fm-status" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ background: role === "patron" ? "#7c3aed" : "#059669", color: "#fff", fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 10 }}>
+              {role === "patron" ? "👑 Patron" : "👷 Salarié"}
+            </span>
             <div style={{ width: 8, height: 8, borderRadius: "50%", background: loading ? "#f59e0b" : "#10b981" }} />
             <span style={{ color: "rgba(255,255,255,.6)", fontSize: 12 }}>{loading ? "Chargement..." : "Connecté"}</span>
           </div>
