@@ -2713,7 +2713,7 @@ export default function App() {
   };
   const currentAdd = ADD_CONFIG[tab];
 
-  if (!unlocked) return <PinLock onUnlock={(r) => { setRole(r); setUnlocked(true); }} />;
+  if (!unlocked) return <PinLock onUnlock={(r) => { setRole(r); setUnlocked(true); if (r === "salarie") setTab("contracts"); }} />;
 
   return (
     <ErrorBoundary>
